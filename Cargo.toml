@@ -1,0 +1,10 @@
+[package]
+name = "Tosa"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+rust-htslib = "0.41"
+log = "0.4"
+env_logger = "0.10"
+itertools = "0.10"
