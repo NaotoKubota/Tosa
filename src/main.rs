@@ -1,12 +1,14 @@
 use clap::{Arg, Command};
 use rust_htslib::bam::{self, Read};
 use rust_htslib::bam::record::{Aux, Cigar};
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::fs::File;
-use std::io::Write;
+use std::io::{Write, BufWriter};
 use log::{info, LevelFilter};
 use env_logger;
 use itertools::Itertools;
+use flate2::write::GzEncoder;
+use flate2::Compression;
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Set up command-line arguments using clap
@@ -17,9 +19,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         .arg(Arg::new("bam_file")
             .required(true)
             .help("Path to the BAM file"))
-        .arg(Arg::new("output_file")
+        .arg(Arg::new("output_prefix")
             .required(true)
-            .help("Path to the output file"))
+            .help("Output prefix for the .mtx, barcodes.tsv, features.tsv, and output.tsv files"))
         .arg(Arg::new("anchor_length")
             .short('a')
             .long("anchor-length")
@@ -47,7 +49,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // Parse arguments
     let bam_file = matches.get_one::<String>("bam_file").unwrap();
-    let output_file = matches.get_one::<String>("output_file").unwrap();
+    let output_prefix = matches.get_one::<String>("output_prefix").unwrap();
     let min_anchor_length = *matches.get_one::<i64>("anchor_length").unwrap();
     let min_intron_length = *matches.get_one::<i64>("min_intron_length").unwrap();
     let max_intron_length = *matches.get_one::<i64>("max_intron_length").unwrap();
@@ -67,12 +69,19 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Log all arguments if verbose is enabled
     info!("Running Tosa with the following arguments:");
     info!("BAM file: {}", bam_file);
-    info!("Output file: {}", output_file);
+    info!("Output prefix: {}", output_prefix);
     info!("Minimum anchor length: {}", min_anchor_length);
     info!("Minimum intron length: {}", min_intron_length);
     info!("Maximum intron length: {}", max_intron_length);
 
-    // Open the BAM file
+    // Count total reads in the BAM file in a preliminary pass
+    let total_reads = {
+        let mut bam_reader = bam::Reader::from_path(bam_file)?;
+        bam_reader.records().count()
+    };
+    info!("Total number of reads: {}", total_reads);
+
+    // Open the BAM file again for processing
     let mut bam_reader = bam::Reader::from_path(bam_file)?;
 
     // Get reference names (chromosome names)
@@ -83,20 +92,25 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         .map(|name| String::from_utf8_lossy(name).to_string())
         .collect();
 
-    // HashMap to store counts by junction and cell barcode
+    // HashMaps to store counts by junction and cell barcode
     let mut junction_counts: HashMap<String, HashMap<String, u32>> = HashMap::new();
+    let mut cell_barcodes: HashSet<String> = HashSet::new();
+    let mut junctions: HashSet<String> = HashSet::new();
 
     // Counter for tracking the number of reads processed
     let mut read_count = 0;
+    let mut last_percentage = 0;
 
     // Iterate over each read in the BAM file
     for result in bam_reader.records() {
         let record = result?;
         read_count += 1;
 
-        // Log every 10,000 reads processed
-        if read_count % 10000 == 0 {
-            info!("Processed {} reads", read_count);
+        // Calculate and log progress at each 1% increment
+        let progress_percentage = (read_count * 100) / total_reads;
+        if progress_percentage > last_percentage {
+            info!("Progress: {}% ({} / {})", progress_percentage, read_count, total_reads);
+            last_percentage = progress_percentage;
         }
 
         // Extract reference name (chromosome) and start position
@@ -111,6 +125,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
         // If a cell barcode is present, process each CIGAR element for junctions
         if let Some(cb_str) = cell_barcode {
+            cell_barcodes.insert(cb_str.clone());
             let cigar_vec = record.cigar();  // Create a longer-lived binding for the cigar data
             let cigars: Vec<_> = cigar_vec.iter().collect();
             for i in 0..cigars.len() {
@@ -149,6 +164,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                         let junction_coords = format!("{}:{}-{}", ref_name, start, end);
 
                         // Increment count for this junction and cell barcode
+                        junctions.insert(junction_coords.clone());
                         let junction_entry = junction_counts.entry(junction_coords).or_insert_with(HashMap::new);
                         *junction_entry.entry(cb_str.clone()).or_insert(0) += 1;
                     }
@@ -171,34 +187,39 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Final log statement for total reads processed
     info!("Total reads processed: {}", read_count);
 
-    // Open the output file for writing
-    let mut output = File::create(output_file)?;
+    // Prepare output files
+    let mut matrix_file = BufWriter::new(File::create(format!("{}_matrix.mtx", output_prefix))?);
+    let mut barcodes_file = BufWriter::new(File::create(format!("{}_barcodes.tsv", output_prefix))?);
+    let mut features_file = BufWriter::new(File::create(format!("{}_features.tsv", output_prefix))?);
+    let mut flat_tsv = GzEncoder::new(File::create(format!("{}_flat.tsv.gz", output_prefix))?, Compression::default());
 
-    // Collect junction entries, parse coordinates, and sort by chromosomal position
-    let mut sorted_junctions: Vec<_> = junction_counts.iter().collect();
-    sorted_junctions.sort_by_key(|(junction, _)| {
-        let parts: Vec<&str> = junction.split([':', '-']).collect();
-        let chrom = parts[0].to_string();
-        let start: i64 = parts[1].parse().unwrap_or(0);
-        let end: i64 = parts[2].parse().unwrap_or(0);
-        (chrom, start, end)
-    });
+    // Write barcodes.tsv
+    let barcode_list: Vec<_> = cell_barcodes.iter().sorted().collect();
+    for barcode in &barcode_list {
+        writeln!(barcodes_file, "{}", barcode)?;
+    }
 
-    // Write the sorted read counts per junction, with breakdown per cell barcode sorted by read count
-    writeln!(output, "Junction\tCount\tCell Barcode")?;
-    for (junction, cell_counts) in sorted_junctions {
-        // Calculate total count for this junction
-        let total_count: u32 = cell_counts.values().sum();
+    // Write features.tsv
+    let feature_list: Vec<_> = junctions.iter().sorted().collect();
+    for feature in &feature_list {
+        writeln!(features_file, "{}", feature)?;
+    }
 
-        // Sort cell barcodes by read count in descending order and format as comma-separated list
-        let cell_barcode_info: String = cell_counts
-            .iter()
-            .sorted_by(|a, b| b.1.cmp(a.1))
-            .map(|(cell_barcode, count)| format!("{}:{}", cell_barcode, count))
-            .collect::<Vec<String>>()
-            .join(",");
+    // Write matrix.mtx header
+    writeln!(matrix_file, "%%MatrixMarket matrix coordinate integer general")?;
+    writeln!(matrix_file, "%")?;
+    writeln!(matrix_file, "{} {} {}", feature_list.len(), barcode_list.len(), junction_counts.values().map(|c| c.len()).sum::<usize>())?;
 
-        writeln!(output, "{}\t{}\t{}", junction, total_count, cell_barcode_info)?;
+    // Write the sparse matrix data and output.tsv
+    for (i, feature) in feature_list.iter().enumerate() {
+        if let Some(cell_counts) = junction_counts.get(*feature) {
+            for (barcode, count) in cell_counts {
+                if let Some(j) = barcode_list.iter().position(|b| *b == barcode) {
+                    writeln!(matrix_file, "{} {} {}", i + 1, j + 1, count)?;
+                    writeln!(flat_tsv, "{}\t{}\t{}", feature, barcode, count)?;
+                }
+            }
+        }
     }
 
     Ok(())
