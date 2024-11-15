@@ -189,8 +189,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // Prepare output files
     let mut matrix_file = BufWriter::new(File::create(format!("{}_matrix.mtx", output_prefix))?);
-    let mut barcodes_file = BufWriter::new(File::create(format!("{}_barcodes.tsv", output_prefix))?);
-    let mut features_file = BufWriter::new(File::create(format!("{}_features.tsv", output_prefix))?);
+    let mut barcodes_file = GzEncoder::new(File::create(format!("{}_barcodes.tsv.gz", output_prefix))?, Compression::default());
+    let mut features_file = GzEncoder::new(File::create(format!("{}_features.tsv.gz", output_prefix))?, Compression::default());
     let mut flat_tsv = GzEncoder::new(File::create(format!("{}_flat.tsv.gz", output_prefix))?, Compression::default());
 
     // Write barcodes.tsv
