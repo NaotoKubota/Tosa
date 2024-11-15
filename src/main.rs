@@ -63,22 +63,22 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Initialize the logger with the appropriate level
     if verbose {
         env_logger::Builder::from_default_env()
-            .filter(None, LevelFilter::Info)
+            .filter(None, LevelFilter::Debug)
             .init();
     } else {
         env_logger::Builder::from_default_env()
-            .filter(None, LevelFilter::Warn)
+            .filter(None, LevelFilter::Info)
             .init();
     }
 
     // Log all arguments if verbose is enabled
-    info!("Running tosa with the following arguments:");
-    info!("Mode: {}", mode);
-    info!("BAM file: {}", bam_file);
-    info!("Output prefix: {}", output_prefix);
-    info!("Minimum anchor length: {}", min_anchor_length);
-    info!("Minimum intron length: {}",min_intron_length);
-    info!("Maximum intron length: {}", max_intron_length);
+    info!("Running tosa");
+    debug!("Mode: {}", mode);
+    debug!("BAM file: {}", bam_file);
+    debug!("Output prefix: {}", output_prefix);
+    debug!("Minimum anchor length: {}", min_anchor_length);
+    debug!("Minimum intron length: {}",min_intron_length);
+    debug!("Maximum intron length: {}", max_intron_length);
 
     // Count total reads in the BAM file in a preliminary pass
     let total_reads = {
@@ -241,5 +241,6 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
     }
 
+    info!("Finished processing");
     Ok(())
 }
