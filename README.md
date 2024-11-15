@@ -10,7 +10,7 @@ Rust implementation of junction read counting from RNA-seq BAM files.
 ```bash
 Counts junction reads from RNA-seq data
 
-Usage: Tosa [OPTIONS] <mode> <bam_file> <output_prefix>
+Usage: tosa [OPTIONS] <mode> <bam_file> <output_prefix>
 
 Arguments:
   <mode>           Mode of operation: 'bulk' or 'single' [possible values: bulk, single]
@@ -42,7 +42,7 @@ cargo build --release
 
 ```bash
 # Count junction reads from bulk RNA-seq BAM file
-./target/release/Tosa bulk -a 8 -m 70 -M 500000 example.bam example.tsv
+./target/release/tosa bulk -a 8 -m 70 -M 500000 example.bam example.tsv
 # Count junction reads from single-cell RNA-seq BAM file
-./target/release/Tosa single -a 8 -m 70 -M 500000 example.bam example.tsv
+./target/release/tosa single -a 8 -m 70 -M 500000 example.bam example.tsv
 ```
