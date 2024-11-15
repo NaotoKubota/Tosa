@@ -9,11 +9,6 @@ use env_logger;
 use itertools::Itertools;
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
-    // Initialize the logger
-    env_logger::Builder::from_default_env()
-        .filter(None, LevelFilter::Info)
-        .init();
-
     // Set up command-line arguments using clap
     let matches = Command::new("Tosa")
         .version("1.0")
@@ -43,6 +38,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             .default_value("500000")
             .value_parser(clap::value_parser!(i64))
             .help("Maximum intron length for junctions"))
+        .arg(Arg::new("verbose")
+            .short('v')
+            .long("verbose")
+            .action(clap::ArgAction::SetTrue)
+            .help("Enable verbose output to print all arguments"))
         .get_matches();
 
     // Parse arguments
@@ -51,6 +51,26 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let min_anchor_length = *matches.get_one::<i64>("anchor_length").unwrap();
     let min_intron_length = *matches.get_one::<i64>("min_intron_length").unwrap();
     let max_intron_length = *matches.get_one::<i64>("max_intron_length").unwrap();
+    let verbose = matches.get_flag("verbose");
+
+    // Initialize the logger with the appropriate level
+    if verbose {
+        env_logger::Builder::from_default_env()
+            .filter(None, LevelFilter::Info)
+            .init();
+    } else {
+        env_logger::Builder::from_default_env()
+            .filter(None, LevelFilter::Warn)
+            .init();
+    }
+
+    // Log all arguments if verbose is enabled
+    info!("Running Tosa with the following arguments:");
+    info!("BAM file: {}", bam_file);
+    info!("Output file: {}", output_file);
+    info!("Minimum anchor length: {}", min_anchor_length);
+    info!("Minimum intron length: {}", min_intron_length);
+    info!("Maximum intron length: {}", max_intron_length);
 
     // Open the BAM file
     let mut bam_reader = bam::Reader::from_path(bam_file)?;
