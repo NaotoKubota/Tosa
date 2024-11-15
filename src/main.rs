@@ -4,7 +4,7 @@ use rust_htslib::bam::record::{Aux, Cigar};
 use std::collections::{HashMap, HashSet};
 use std::fs::File;
 use std::io::{Write};
-use log::{info, LevelFilter};
+use log::{info, debug, LevelFilter};
 use env_logger;
 use itertools::Itertools;
 use flate2::write::GzEncoder;
