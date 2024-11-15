@@ -1,5 +1,5 @@
 [package]
-name = "Tosa"
+name = "tosa"
 version = "0.1.0"
 edition = "2021"
 
@@ -10,3 +10,7 @@ env_logger = "0.10"
 rust-htslib = "0.40"  # Replace with the appropriate version you're using
 itertools = "0.10"
 flate2 = "1.0"
+
+[[bin]]
+name = "tosa" # This is the binary name
+path = "src/main.rs" # Path to your main entry point
