@@ -1,7 +1,7 @@
+use clap::{Arg, Command};
 use rust_htslib::bam::{self, Read};
 use rust_htslib::bam::record::{Aux, Cigar};
 use std::collections::HashMap;
-use std::env;
 use std::fs::File;
 use std::io::Write;
 use log::{info, LevelFilter};
@@ -14,18 +14,43 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         .filter(None, LevelFilter::Info)
         .init();
 
-    // Get command-line arguments
-    let args: Vec<String> = env::args().collect();
+    // Set up command-line arguments using clap
+    let matches = Command::new("Tosa")
+        .version("1.0")
+        .author("Your Name")
+        .about("Counts junction reads with a minimum anchor length requirement")
+        .arg(Arg::new("bam_file")
+            .required(true)
+            .help("Path to the BAM file"))
+        .arg(Arg::new("output_file")
+            .required(true)
+            .help("Path to the output file"))
+        .arg(Arg::new("anchor_length")
+            .short('a')
+            .long("anchor-length")
+            .default_value("8")
+            .value_parser(clap::value_parser!(i64))
+            .help("Minimum anchor length for both sides of junctions"))
+        .arg(Arg::new("min_intron_length")
+            .short('m')
+            .long("min-intron-length")
+            .default_value("70")
+            .value_parser(clap::value_parser!(i64))
+            .help("Minimum intron length for junctions"))
+        .arg(Arg::new("max_intron_length")
+            .short('M')
+            .long("max-intron-length")
+            .default_value("500000")
+            .value_parser(clap::value_parser!(i64))
+            .help("Maximum intron length for junctions"))
+        .get_matches();
 
-    // Check if both the BAM file path and output file path are provided
-    if args.len() < 3 {
-        eprintln!("Usage: {} <bam_file> <output_file>", args[0]);
-        std::process::exit(1);
-    }
-
-    // Use the BAM file and output file paths from the command line
-    let bam_file = &args[1];
-    let output_file = &args[2];
+    // Parse arguments
+    let bam_file = matches.get_one::<String>("bam_file").unwrap();
+    let output_file = matches.get_one::<String>("output_file").unwrap();
+    let min_anchor_length = *matches.get_one::<i64>("anchor_length").unwrap();
+    let min_intron_length = *matches.get_one::<i64>("min_intron_length").unwrap();
+    let max_intron_length = *matches.get_one::<i64>("max_intron_length").unwrap();
 
     // Open the BAM file
     let mut bam_reader = bam::Reader::from_path(bam_file)?;
@@ -49,7 +74,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         let record = result?;
         read_count += 1;
 
-        // Log every 10000 reads processed
+        // Log every 10,000 reads processed
         if read_count % 10000 == 0 {
             info!("Processed {} reads", read_count);
         }
@@ -66,25 +91,58 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
         // If a cell barcode is present, process each CIGAR element for junctions
         if let Some(cb_str) = cell_barcode {
-            for cigar in record.cigar().iter() {
-                match cigar {
-                    Cigar::RefSkip(len) => {
-                        // Found a junction; calculate the coordinates
+            let cigar_vec = record.cigar();  // Create a longer-lived binding for the cigar data
+            let cigars: Vec<_> = cigar_vec.iter().collect();
+            for i in 0..cigars.len() {
+                if let Cigar::RefSkip(len) = cigars[i] {
+                    // Check intron length constraints
+                    let intron_length = *len as i64;
+                    if intron_length < min_intron_length || intron_length > max_intron_length {
+                        // Skip junctions outside the specified intron length range
+                        current_pos += intron_length;
+                        continue;
+                    }
+
+                    // Check for minimum anchor length on both sides
+                    let has_left_anchor = if i > 0 {
+                        match cigars[i - 1] {
+                            Cigar::Match(l) | Cigar::Equal(l) | Cigar::Diff(l) => *l as i64 >= min_anchor_length,
+                            _ => false,
+                        }
+                    } else {
+                        false
+                    };
+
+                    let has_right_anchor = if i < cigars.len() - 1 {
+                        match cigars[i + 1] {
+                            Cigar::Match(r) | Cigar::Equal(r) | Cigar::Diff(r) => *r as i64 >= min_anchor_length,
+                            _ => false
+                        }
+                    } else {
+                        false
+                    };
+
+                    if has_left_anchor && has_right_anchor {
+                        // Found a valid junction; calculate the coordinates
                         let start = current_pos + 1; // BAM is 0-based, BED is 1-based
-                        let end = start + (*len as i64);
+                        let end = start + intron_length;
                         let junction_coords = format!("{}:{}-{}", ref_name, start, end);
 
                         // Increment count for this junction and cell barcode
                         let junction_entry = junction_counts.entry(junction_coords).or_insert_with(HashMap::new);
                         *junction_entry.entry(cb_str.clone()).or_insert(0) += 1;
+                    }
 
-                        // Update current position to the end of this junction
-                        current_pos = end - 1;
+                    // Update current position to the end of this junction
+                    current_pos += intron_length;
+                } else {
+                    // Update current position for non-junction elements
+                    match cigars[i] {
+                        Cigar::Match(l) | Cigar::Ins(l) | Cigar::SoftClip(l) | Cigar::Del(l) => {
+                            current_pos += *l as i64;
+                        }
+                        _ => {}
                     }
-                    Cigar::Match(len) | Cigar::Ins(len) | Cigar::SoftClip(len) | Cigar::Del(len) => {
-                        current_pos += *len as i64;
-                    }
-                    _ => {}
                 }
             }
         }

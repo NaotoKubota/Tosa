@@ -4,7 +4,8 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-rust-htslib = "0.41"
+clap = "4.0"  # Replace with the latest version if needed
 log = "0.4"
 env_logger = "0.10"
+rust-htslib = "0.40"  # Replace with the appropriate version you're using
 itertools = "0.10"
