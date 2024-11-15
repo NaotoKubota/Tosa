@@ -12,7 +12,7 @@ use flate2::Compression;
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Set up command-line arguments using clap
-    let matches = Command::new("Tosa")
+    let matches = Command::new("tosa")
         .version("0.1.0")
         .author("NaotoKubota")
         .about("Counts junction reads from RNA-seq data")
@@ -72,7 +72,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     }
 
     // Log all arguments if verbose is enabled
-    info!("Running Tosa with the following arguments:");
+    info!("Running tosa with the following arguments:");
     info!("Mode: {}", mode);
     info!("BAM file: {}", bam_file);
     info!("Output prefix: {}", output_prefix);
