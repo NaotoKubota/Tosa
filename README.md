@@ -1,3 +1,6 @@
+[![GitHub License](https://img.shields.io/github/license/NaotoKubota/Tosa)](https://github.com/NaotoKubota/Tosa/blob/main/LICENSE)
+![Rust](https://github.com/NaotoKubota/Tosa/actions/workflows/rust.yml/badge.svg)
+
 # Tosa (v0.1.0)
 
 Rust implementation of junction read counting from RNA-seq BAM files.
