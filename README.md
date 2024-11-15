@@ -1,5 +1,5 @@
 [![GitHub License](https://img.shields.io/github/license/NaotoKubota/Tosa)](https://github.com/NaotoKubota/Tosa/blob/main/LICENSE)
-![Rust](https://github.com/NaotoKubota/Tosa/actions/workflows/rust.yml/badge.svg)
+[![Rust](https://github.com/NaotoKubota/Tosa/actions/workflows/rust.yaml/badge.svg)](https://github.com/NaotoKubota/Tosa/actions/workflows/rust.yaml)
 
 # Tosa (v0.1.0)
 
