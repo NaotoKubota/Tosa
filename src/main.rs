@@ -11,8 +11,8 @@ use itertools::Itertools;
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Set up command-line arguments using clap
     let matches = Command::new("Tosa")
-        .version("1.0")
-        .author("Your Name")
+        .version("0.1.0")
+        .author("NaotoKubota")
         .about("Counts junction reads with a minimum anchor length requirement")
         .arg(Arg::new("bam_file")
             .required(true)
