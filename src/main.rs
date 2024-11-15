@@ -13,7 +13,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let matches = Command::new("Tosa")
         .version("0.1.0")
         .author("NaotoKubota")
-        .about("Counts junction reads with a minimum anchor length requirement")
+        .about("Counts junction reads from scRNA-seq data")
         .arg(Arg::new("bam_file")
             .required(true)
             .help("Path to the BAM file"))
