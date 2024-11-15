@@ -1,17 +1,18 @@
-# Tosa
+# Tosa (v0.1.0)
 
-Rust implementation of junction read counting from deduplicated scRNA-seq BAM files.
+Rust implementation of junction read counting from RNA-seq BAM files.
 
 ## Usage
 
 ```bash
-Counts junction reads from scRNA-seq data
+Counts junction reads from RNA-seq data
 
-Usage: Tosa [OPTIONS] <bam_file> <output_file>
+Usage: Tosa [OPTIONS] <mode> <bam_file> <output_prefix>
 
 Arguments:
-  <bam_file>     Path to the BAM file
-  <output_file>  Path to the output file
+  <mode>           Mode of operation: 'bulk' or 'single' [possible values: bulk, single]
+  <bam_file>       Path to the BAM file
+  <output_prefix>  Output prefix for the output files
 
 Options:
   -a, --anchor-length <anchor_length>
@@ -37,5 +38,8 @@ cargo build --release
 ## Example
 
 ```bash
-./target/release/Tosa -a 8 -m 70 -M 500000 example.bam example.tsv
+# Count junction reads from bulk RNA-seq BAM file
+./target/release/Tosa bulk -a 8 -m 70 -M 500000 example.bam example.tsv
+# Count junction reads from single-cell RNA-seq BAM file
+./target/release/Tosa single -a 8 -m 70 -M 500000 example.bam example.tsv
 ```
