@@ -10,6 +10,28 @@ use itertools::Itertools;
 use flate2::write::GzEncoder;
 use flate2::Compression;
 
+fn process_junction(
+    junction_coords: &str,
+    cell_barcode: Option<&String>,
+    _current_pos: i64,
+    junction_counts: &mut HashMap<String, HashMap<String, u32>>,
+    junction_totals: &mut HashMap<String, u32>,
+    mode: &str,
+) {
+    if mode == "single" {
+        if let Some(cb_str) = cell_barcode {
+            let junction_entry = junction_counts
+                .entry(junction_coords.to_string())
+                .or_insert_with(HashMap::new);
+            *junction_entry.entry(cb_str.clone()).or_insert(0) += 1;
+        }
+    } else {
+        *junction_totals
+            .entry(junction_coords.to_string())
+            .or_insert(0) += 1;
+    }
+}
+
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Set up command-line arguments using clap
     let matches = Command::new("tosa")
@@ -108,6 +130,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let mut read_count = 0;
     let mut last_percentage = 0;
 
+    // HashSet to store supported junctions and HashMap to store buffered reads
+    let mut supported_junctions: HashSet<String> = HashSet::new();
+    let mut buffered_reads: HashMap<String, Vec<(Option<String>, i64)>> = HashMap::new();
+
     // Iterate over each read in the BAM file
     for result in bam_reader.records() {
         let record = result?;
@@ -152,46 +178,54 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                         continue;
                     }
 
-                    // Check for minimum anchor length on both sides
-                    let has_left_anchor = if i > 0 {
-                        matches!(cigars[i - 1], Cigar::Match(l) | Cigar::Equal(l) | Cigar::Diff(l) if *l as i64 >= min_anchor_length)
-                    } else {
-                        false
-                    };
+                    let has_left_anchor = i > 0 && matches!(cigars[i - 1], Cigar::Match(l) | Cigar::Equal(l) | Cigar::Diff(l) if *l as i64 >= min_anchor_length);
+                    let has_right_anchor = i < cigars.len() - 1 && matches!(cigars[i + 1], Cigar::Match(r) | Cigar::Equal(r) | Cigar::Diff(r) if *r as i64 >= min_anchor_length);
 
-                    let has_right_anchor = if i < cigars.len() - 1 {
-                        matches!(cigars[i + 1], Cigar::Match(r) | Cigar::Equal(r) | Cigar::Diff(r) if *r as i64 >= min_anchor_length)
-                    } else {
-                        false
-                    };
+                    let start = current_pos;
+                    let end = start + intron_length + 1;
+                    let junction_coords = format!("{}:{}-{}", ref_name, start, end);
 
                     if has_left_anchor && has_right_anchor {
-                        // Found a valid junction; calculate the coordinates
-                        let start = current_pos + 1; // BAM is 0-based, BED is 1-based
-                        let end = start + intron_length;
-                        let junction_coords = format!("{}:{}-{}", ref_name, start, end);
-
-                        // Increment count for this junction
-                        if mode == "single" {
-                            let junction_entry = junction_counts.entry(junction_coords.clone()).or_insert_with(HashMap::new);
-                            if let Some(cb_str) = &cell_barcode {
-                                *junction_entry.entry(cb_str.clone()).or_insert(0) += 1;
+                        // Mark as supported and process buffered reads
+                        supported_junctions.insert(junction_coords.clone());
+                        if let Some(buffered) = buffered_reads.remove(&junction_coords) {
+                            for (buffered_cb, buffered_pos) in buffered {
+                                process_junction(
+                                    &junction_coords,
+                                    buffered_cb.as_ref(),
+                                    buffered_pos,
+                                    &mut junction_counts,
+                                    &mut junction_totals,
+                                    &mode,
+                                );
                             }
-                        } else {
-                            *junction_totals.entry(junction_coords.clone()).or_insert(0) += 1;
                         }
                     }
 
-                    // Update current position to the end of this junction
-                    current_pos += intron_length;
-                } else {
-                    // Update current position for non-junction elements
-                    match cigars[i] {
-                        Cigar::Match(l) | Cigar::Ins(l) | Cigar::SoftClip(l) | Cigar::Del(l) => {
-                            current_pos += *l as i64;
-                        }
-                        _ => {}
+                    // Process or buffer the current read
+                    if supported_junctions.contains(&junction_coords) {
+                        process_junction(
+                            &junction_coords,
+                            cell_barcode.as_ref(),
+                            current_pos,
+                            &mut junction_counts,
+                            &mut junction_totals,
+                            &mode,
+                        );
+                    } else {
+                        buffered_reads
+                            .entry(junction_coords.clone())
+                            .or_insert_with(Vec::new)
+                            .push((cell_barcode.clone(), current_pos));
                     }
+                    current_pos += intron_length;
+                } else if let Cigar::SoftClip(_len) = cigars[i] {
+                    continue;
+                } else {
+                    current_pos += match cigars[i] {
+                        Cigar::Match(l) | Cigar::Ins(l) | Cigar::Del(l) => *l as i64,
+                        _ => 0,
+                    };
                 }
             }
         }
