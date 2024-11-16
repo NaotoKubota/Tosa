@@ -81,6 +81,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     debug!("Maximum intron length: {}", max_intron_length);
 
     // Count total reads in the BAM file in a preliminary pass
+    info!("Counting total reads in the BAM file");
     let total_reads = {
         let mut bam_reader = bam::Reader::from_path(bam_file)?;
         bam_reader.records().count()
@@ -197,6 +198,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     }
 
     // Write results based on mode
+    info!("Writing output files");
     if mode == "single" {
         // Prepare output files with compression
         let mut matrix_file = GzEncoder::new(File::create(format!("{}_matrix.mtx.gz", output_prefix))?, Compression::default());
@@ -205,36 +207,59 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         let mut output_tsv = GzEncoder::new(File::create(format!("{}_junction_barcodes.tsv.gz", output_prefix))?, Compression::default());
 
         // Write barcodes.tsv.gz
+        debug!("Writing barcodes.tsv.gz");
         let barcode_list: Vec<_> = cell_barcodes.iter().sorted().collect();
         for barcode in &barcode_list {
             writeln!(barcodes_file, "{}", barcode)?;
         }
 
         // Write features.tsv.gz
+        debug!("Writing features.tsv.gz");
         let feature_list: Vec<_> = junction_counts.keys().sorted().collect();
         for feature in &feature_list {
             writeln!(features_file, "{}", feature)?;
         }
 
-        // Write matrix.mtx.gz header
-        writeln!(matrix_file, "%%MatrixMarket matrix coordinate integer general")?;
-        writeln!(matrix_file, "%")?;
-        writeln!(matrix_file, "{} {} {}", feature_list.len(), barcode_list.len(), junction_counts.values().map(|c| c.len()).sum::<usize>())?;
+        // Buffers to accumulate lines for matrix.mtx.gz and output.tsv.gz
+        let mut matrix_buffer: Vec<String> = Vec::new();
+        let mut tsv_buffer: Vec<String> = Vec::new();
 
-        // Write the sparse matrix data and output.tsv.gz
-        writeln!(output_tsv, "Feature\tBarcode\tCount")?;
+        // Add the header lines to the matrix buffer
+        matrix_buffer.push("%%MatrixMarket matrix coordinate integer general".to_string());
+        matrix_buffer.push("%".to_string());
+        matrix_buffer.push(format!(
+            "{} {} {}",
+            feature_list.len(),
+            barcode_list.len(),
+            junction_counts.values().map(|c| c.len()).sum::<usize>()
+        ));
+
+        // Add sparse matrix data and TSV data to the buffers
+        debug!("Writing matrix.mtx.gz and output.tsv.gz");
+        let barcode_map: HashMap<_, _> = barcode_list.iter().enumerate().map(|(i, b)| (b.as_str(), i + 1)).collect();
+        tsv_buffer.push("Feature\tBarcode\tCount".to_string());
         for (i, feature) in feature_list.iter().enumerate() {
             if let Some(cell_counts) = junction_counts.get(*feature) {
                 for (barcode, count) in cell_counts {
-                    if let Some(j) = barcode_list.iter().position(|b| *b == barcode) {
-                        writeln!(matrix_file, "{} {} {}", i + 1, j + 1, count)?;
-                        writeln!(output_tsv, "{}\t{}\t{}", feature, barcode, count)?;
+                    if let Some(&j) = barcode_map.get(barcode.as_str()) {
+                        matrix_buffer.push(format!("{} {} {}", i + 1, j + 1, count));
+                        tsv_buffer.push(format!("{}\t{}\t{}", feature, barcode, count));
                     }
                 }
             }
         }
+
+        // Write the accumulated lines to the compressed output files
+        for line in matrix_buffer {
+            writeln!(matrix_file, "{}", line)?;
+        }
+        for line in tsv_buffer {
+            writeln!(output_tsv, "{}", line)?;
+        }
+
     } else if mode == "bulk" {
         let mut output_file = GzEncoder::new(File::create(format!("{}_junction.tsv.gz", output_prefix))?, Compression::default());
+        debug!("Writing junction.tsv.gz");
         writeln!(output_file, "Junction\tCount")?;
         for (junction, count) in junction_totals.iter().sorted() {
             writeln!(output_file, "{}\t{}", junction, count)?;
