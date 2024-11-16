@@ -13,11 +13,25 @@ use flate2::Compression;
 fn process_junction(
     junction_coords: &str,
     cell_barcode: Option<&String>,
-    _current_pos: i64,
     junction_counts: &mut HashMap<String, HashMap<String, u32>>,
     junction_totals: &mut HashMap<String, u32>,
+    processed_reads: &mut HashMap<String, HashSet<String>>,
+    read_name: &str,                                        // Read name for tracking
     mode: &str,
 ) {
+    // Check if the read was already processed for this junction
+    if let Some(reads) = processed_reads.get_mut(junction_coords) {
+        if reads.contains(read_name) {
+            return; // Skip counting
+        }
+        reads.insert(read_name.to_string());
+    } else {
+        let mut reads_set = HashSet::new();
+        reads_set.insert(read_name.to_string());
+        processed_reads.insert(junction_coords.to_string(), reads_set);
+    }
+
+    // Count the read for the junction
     if mode == "single" {
         if let Some(cb_str) = cell_barcode {
             let junction_entry = junction_counts
@@ -134,6 +148,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let mut supported_junctions: HashSet<String> = HashSet::new();
     let mut buffered_reads: HashMap<String, Vec<(Option<String>, i64)>> = HashMap::new();
 
+    // HashMap to store processed reads by junction
+    let mut processed_reads: HashMap<String, HashSet<String>> = HashMap::new();
+
     // Iterate over each read in the BAM file
     for result in bam_reader.records() {
         let record = result?;
@@ -189,13 +206,14 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                         // Mark as supported and process buffered reads
                         supported_junctions.insert(junction_coords.clone());
                         if let Some(buffered) = buffered_reads.remove(&junction_coords) {
-                            for (buffered_cb, buffered_pos) in buffered {
+                            for (buffered_cb, _buffered_pos) in buffered {
                                 process_junction(
                                     &junction_coords,
                                     buffered_cb.as_ref(),
-                                    buffered_pos,
                                     &mut junction_counts,
                                     &mut junction_totals,
+                                    &mut processed_reads, // Pass the processed reads map
+                                    std::str::from_utf8(record.qname()).unwrap(), // Pass read name
                                     &mode,
                                 );
                             }
@@ -207,9 +225,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                         process_junction(
                             &junction_coords,
                             cell_barcode.as_ref(),
-                            current_pos,
                             &mut junction_counts,
                             &mut junction_totals,
+                            &mut processed_reads, // Pass the processed reads map
+                            std::str::from_utf8(record.qname()).unwrap(), // Pass read name
                             &mode,
                         );
                     } else {
@@ -269,7 +288,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         ));
 
         // Add sparse matrix data and TSV data to the buffers
-        debug!("Writing matrix.mtx.gz and output.tsv.gz");
+        debug!("Writing matrix.mtx.gz and junction_barcodes.tsv.gz");
         let barcode_map: HashMap<_, _> = barcode_list.iter().enumerate().map(|(i, b)| (b.as_str(), i + 1)).collect();
         tsv_buffer.push("Feature\tBarcode\tCount".to_string());
         for (i, feature) in feature_list.iter().enumerate() {
