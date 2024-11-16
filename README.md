@@ -42,7 +42,7 @@ cargo build --release
 
 ```bash
 # Count junction reads from bulk RNA-seq BAM file
-./target/release/tosa bulk -a 8 -m 70 -M 500000 example.bam example.tsv
+./target/release/tosa bulk -a 8 -m 70 -M 500000 example.bam output_example
 # Count junction reads from single-cell RNA-seq BAM file
-./target/release/tosa single -a 8 -m 70 -M 500000 example.bam example.tsv
+./target/release/tosa single -a 8 -m 70 -M 500000 example.bam output_example
 ```
