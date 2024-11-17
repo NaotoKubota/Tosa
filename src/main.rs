@@ -3,7 +3,7 @@ use rust_htslib::bam::{self, Read};
 use rust_htslib::bam::record::{Aux, Cigar};
 use std::collections::{HashMap, HashSet};
 use std::fs::File;
-use std::io::{Write};
+use std::io::{BufRead, BufReader, Write};
 use log::{info, debug, LevelFilter};
 use env_logger;
 use itertools::Itertools;
@@ -46,6 +46,19 @@ fn process_junction(
     }
 }
 
+fn load_cell_barcodes(file_path: Option<&String>) -> Result<HashSet<String>, Box<dyn std::error::Error>> {
+    let mut barcodes = HashSet::new();
+    if let Some(path) = file_path {
+        let file = File::open(path)?;
+        let reader = BufReader::new(file);
+        for line in reader.lines() {
+            let barcode = line?.trim().to_string();
+            barcodes.insert(barcode);
+        }
+    }
+    Ok(barcodes)
+}
+
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Set up command-line arguments using clap
     let matches = Command::new("tosa")
@@ -62,6 +75,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         .arg(Arg::new("output_prefix")
             .required(true)
             .help("Output prefix for the output files"))
+        .arg(Arg::new("cell_barcode_file")
+            .short('c')
+            .long("cell-barcodes")
+            .value_parser(clap::value_parser!(String))
+            .help("Optional file specifying cell barcodes of interest"))
         .arg(Arg::new("anchor_length")
             .short('a')
             .long("anchor-length")
@@ -91,6 +109,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let mode = matches.get_one::<String>("mode").unwrap();
     let bam_file = matches.get_one::<String>("bam_file").unwrap();
     let output_prefix = matches.get_one::<String>("output_prefix").unwrap();
+    let cell_barcode_file = matches.get_one::<String>("cell_barcode_file");
     let min_anchor_length = *matches.get_one::<i64>("anchor_length").unwrap();
     let min_intron_length = *matches.get_one::<i64>("min_intron_length").unwrap();
     let max_intron_length = *matches.get_one::<i64>("max_intron_length").unwrap();
@@ -115,6 +134,21 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     debug!("Minimum anchor length: {}", min_anchor_length);
     debug!("Minimum intron length: {}",min_intron_length);
     debug!("Maximum intron length: {}", max_intron_length);
+    // Load cell barcodes of interest
+    let cell_barcodes_of_interest = if mode == "single" {
+        let barcodes = load_cell_barcodes(cell_barcode_file)?;
+        debug!(
+            "Cell barcodes of interest: {}",
+            if barcodes.is_empty() {
+                "None (processing all reads)".to_string()
+            } else {
+                format!("{} barcodes", barcodes.len())
+            }
+        );
+        barcodes
+    } else {
+        HashSet::new()
+    };
 
     // Count total reads in the BAM file in a preliminary pass
     info!("Counting total reads in the BAM file");
@@ -176,6 +210,13 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         } else {
             None
         };
+
+        // Skip read if its barcode is not in the list of interest
+        if let Some(cb) = &cell_barcode {
+            if cell_barcode_file.is_some() && !cell_barcodes_of_interest.is_empty() && !cell_barcodes_of_interest.contains(cb) {
+            continue;
+            }
+        }
 
         // If a cell barcode is present (for single mode), or always process for bulk mode
         if mode == "bulk" || cell_barcode.is_some() {
