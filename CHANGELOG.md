@@ -6,6 +6,8 @@ All notable changes to this Tosa project will be documented in this file.
 
 ### Added
 
+- Add `--cell-barcodes` option to count reads by cell barcodes of interest.
+
 ### Changed
 
 - Count paired reads that span the same junction only once, not twice.
