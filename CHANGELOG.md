@@ -11,6 +11,7 @@ All notable changes to this Tosa project will be documented in this file.
 ### Changed
 
 - Count paired reads that span the same junction only once, not twice.
+- Refactor anchor length calculation in junction processing
 
 ### Fixed
 

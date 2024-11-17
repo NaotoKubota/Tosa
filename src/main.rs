@@ -236,8 +236,44 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                         continue;
                     }
 
-                    let has_left_anchor = i > 0 && matches!(cigars[i - 1], Cigar::Match(l) | Cigar::Equal(l) | Cigar::Diff(l) if *l as i64 >= min_anchor_length);
-                    let has_right_anchor = i < cigars.len() - 1 && matches!(cigars[i + 1], Cigar::Match(r) | Cigar::Equal(r) | Cigar::Diff(r) if *r as i64 >= min_anchor_length);
+                    // let has_left_anchor = i > 0 && matches!(cigars[i - 1], Cigar::Match(l) | Cigar::Equal(l) | Cigar::Diff(l) if *l as i64 >= min_anchor_length);
+                    // let has_right_anchor = i < cigars.len() - 1 && matches!(cigars[i + 1], Cigar::Match(r) | Cigar::Equal(r) | Cigar::Diff(r) if *r as i64 >= min_anchor_length);
+
+                    // Calculate left anchor length by accumulating lengths before the RefSkip
+                    let mut left_anchor_length = 0;
+                    let mut j = i; // Start from the current CIGAR index
+                    while j > 0 {
+                        j -= 1; // Move to the previous CIGAR element
+                        match cigars[j] {
+                            Cigar::Match(l) | Cigar::Equal(l) | Cigar::Diff(l) => {
+                                left_anchor_length += *l as i64;
+                                if left_anchor_length >= min_anchor_length {
+                                    break; // Stop if the threshold is met
+                                }
+                            }
+                            Cigar::RefSkip(_) => continue, // Skip RefSkip and keep checking alignment elements
+                            _ => break, // Stop accumulating for other operations
+                        }
+                    }
+                    let has_left_anchor = left_anchor_length >= min_anchor_length;
+
+                    // Calculate right anchor length by accumulating lengths after the RefSkip
+                    let mut right_anchor_length = 0;
+                    let mut k = i + 1; // Start from the next CIGAR index
+                    while k < cigars.len() {
+                        match cigars[k] {
+                            Cigar::Match(r) | Cigar::Equal(r) | Cigar::Diff(r) => {
+                                right_anchor_length += *r as i64;
+                                if right_anchor_length >= min_anchor_length {
+                                    break; // Stop if the threshold is met
+                                }
+                            }
+                            Cigar::RefSkip(_) => { k += 1; continue; } // Skip RefSkip and keep checking alignment elements
+                            _ => break, // Stop accumulating for other operations
+                        }
+                        k += 1; // Move to the next CIGAR element
+                    }
+                    let has_right_anchor = right_anchor_length >= min_anchor_length;
 
                     let start = current_pos;
                     let end = start + intron_length + 1;
