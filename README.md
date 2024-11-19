@@ -8,7 +8,7 @@ Rust implementation of junction read counting from RNA-seq BAM files.
 ## Usage
 
 ```bash
-Counts junction reads from RNA-seq data
+Extract junction reads from RNA-seq/scRNA-seq bam files
 
 Usage: tosa [OPTIONS] <mode> <bam_file> <output_prefix>
 

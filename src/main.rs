@@ -64,7 +64,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let matches = Command::new("tosa")
         .version("0.1.0")
         .author("NaotoKubota")
-        .about("Counts junction reads from RNA-seq data")
+        .about("Extract junction reads from RNA-seq/scRNA-seq bam files")
         .arg(Arg::new("mode")
             .required(true)
             .value_parser(["bulk", "single"])
