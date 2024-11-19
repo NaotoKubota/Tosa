@@ -236,9 +236,6 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                         continue;
                     }
 
-                    // let has_left_anchor = i > 0 && matches!(cigars[i - 1], Cigar::Match(l) | Cigar::Equal(l) | Cigar::Diff(l) if *l as i64 >= min_anchor_length);
-                    // let has_right_anchor = i < cigars.len() - 1 && matches!(cigars[i + 1], Cigar::Match(r) | Cigar::Equal(r) | Cigar::Diff(r) if *r as i64 >= min_anchor_length);
-
                     // Calculate left anchor length by accumulating lengths before the RefSkip
                     let mut left_anchor_length = 0;
                     let mut j = i; // Start from the current CIGAR index
