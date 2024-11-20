@@ -98,6 +98,12 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             .default_value("500000")
             .value_parser(clap::value_parser!(i64))
             .help("Maximum intron length for junctions"))
+        .arg(Arg::new("max_loci")
+            .short('l')
+            .long("max-loci")
+            .default_value("1")
+            .value_parser(clap::value_parser!(u32))
+            .help("Maximum number of loci the read maps to"))
         .arg(Arg::new("verbose")
             .short('v')
             .long("verbose")
@@ -113,6 +119,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let min_anchor_length = *matches.get_one::<i64>("anchor_length").unwrap();
     let min_intron_length = *matches.get_one::<i64>("min_intron_length").unwrap();
     let max_intron_length = *matches.get_one::<i64>("max_intron_length").unwrap();
+    let max_loci = *matches.get_one::<u32>("max_loci").unwrap();
     let verbose = matches.get_flag("verbose");
 
     // Initialize the logger with the appropriate level
@@ -134,6 +141,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     debug!("Minimum anchor length: {}", min_anchor_length);
     debug!("Minimum intron length: {}",min_intron_length);
     debug!("Maximum intron length: {}", max_intron_length);
+    debug!("Maximum loci (NH): {}", max_loci);
     // Load cell barcodes of interest
     let cell_barcodes_of_interest = if mode == "single" {
         let barcodes = load_cell_barcodes(cell_barcode_file)?;
@@ -195,6 +203,19 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         if progress_percentage > last_percentage {
             info!("Progress: {}% ({} / {})", progress_percentage, read_count, total_reads);
             last_percentage = progress_percentage;
+        }
+
+        // Skip read if NH tag exceeds max_loci
+        if let Ok(Aux::U8(nh)) = record.aux(b"NH") {
+            if nh > max_loci as u8 {
+                debug!("Skipping read {} with NH > max_loci ({})", std::str::from_utf8(record.qname()).unwrap(), nh);
+                continue; // Skip this read
+            }
+        } else if let Ok(Aux::I32(nh)) = record.aux(b"NH") {
+            if nh > max_loci as i32 {
+                debug!("Skipping read {} with NH > max_loci ({})", std::str::from_utf8(record.qname()).unwrap(), nh);
+                continue; // Skip this read
+            }
         }
 
         // Extract reference name (chromosome) and start position
