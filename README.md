@@ -18,12 +18,16 @@ Arguments:
   <output_prefix>  Output prefix for the output files
 
 Options:
+  -c, --cell-barcodes <cell_barcode_file>
+          Optional file specifying cell barcodes of interest
   -a, --anchor-length <anchor_length>
           Minimum anchor length for both sides of junctions [default: 8]
   -m, --min-intron-length <min_intron_length>
           Minimum intron length for junctions [default: 70]
   -M, --max-intron-length <max_intron_length>
           Maximum intron length for junctions [default: 500000]
+  -l, --max-loci <max_loci>
+          Maximum number of loci the read maps to [default: 1]
   -v, --verbose
           Enable verbose output to print all arguments
   -h, --help

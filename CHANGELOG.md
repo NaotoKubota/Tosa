@@ -7,6 +7,7 @@ All notable changes to this Tosa project will be documented in this file.
 ### Added
 
 - Add `--cell-barcodes` option to count reads by cell barcodes of interest.
+- Add `--max-loci` option to count reads that map to a maximum number of loci.
 
 ### Changed
 
