@@ -135,17 +135,17 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // Log all arguments if verbose is enabled
     info!("Running tosa");
-    debug!("Mode: {}", mode);
-    debug!("BAM file: {}", bam_file);
-    debug!("Output prefix: {}", output_prefix);
-    debug!("Minimum anchor length: {}", min_anchor_length);
-    debug!("Minimum intron length: {}",min_intron_length);
-    debug!("Maximum intron length: {}", max_intron_length);
-    debug!("Maximum loci (NH): {}", max_loci);
+    info!("Mode: {}", mode);
+    info!("BAM file: {}", bam_file);
+    info!("Output prefix: {}", output_prefix);
+    info!("Minimum anchor length: {}", min_anchor_length);
+    info!("Minimum intron length: {}",min_intron_length);
+    info!("Maximum intron length: {}", max_intron_length);
+    info!("Maximum loci (NH): {}", max_loci);
     // Load cell barcodes of interest
     let cell_barcodes_of_interest = if mode == "single" {
         let barcodes = load_cell_barcodes(cell_barcode_file)?;
-        debug!(
+        info!(
             "Cell barcodes of interest: {}",
             if barcodes.is_empty() {
                 "None (processing all reads)".to_string()
