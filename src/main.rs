@@ -3,61 +3,15 @@ use rust_htslib::bam::{self, Read};
 use rust_htslib::bam::record::{Aux, Cigar};
 use std::collections::{HashMap, HashSet};
 use std::fs::File;
-use std::io::{BufRead, BufReader, Write};
+use std::io::{Write};
 use log::{info, debug, LevelFilter};
 use env_logger;
 use itertools::Itertools;
 use flate2::write::GzEncoder;
 use flate2::Compression;
 
-fn process_junction(
-    junction_coords: &str,
-    cell_barcode: Option<&String>,
-    junction_counts: &mut HashMap<String, HashMap<String, u32>>,
-    junction_totals: &mut HashMap<String, u32>,
-    processed_reads: &mut HashMap<String, HashSet<String>>,
-    read_name: &str,                                        // Read name for tracking
-    mode: &str,
-) {
-    // Check if the read was already processed for this junction
-    if let Some(reads) = processed_reads.get_mut(junction_coords) {
-        if reads.contains(read_name) {
-            return; // Skip counting
-        }
-        reads.insert(read_name.to_string());
-    } else {
-        let mut reads_set = HashSet::new();
-        reads_set.insert(read_name.to_string());
-        processed_reads.insert(junction_coords.to_string(), reads_set);
-    }
-
-    // Count the read for the junction
-    if mode == "single" {
-        if let Some(cb_str) = cell_barcode {
-            let junction_entry = junction_counts
-                .entry(junction_coords.to_string())
-                .or_insert_with(HashMap::new);
-            *junction_entry.entry(cb_str.clone()).or_insert(0) += 1;
-        }
-    } else {
-        *junction_totals
-            .entry(junction_coords.to_string())
-            .or_insert(0) += 1;
-    }
-}
-
-fn load_cell_barcodes(file_path: Option<&String>) -> Result<HashSet<String>, Box<dyn std::error::Error>> {
-    let mut barcodes = HashSet::new();
-    if let Some(path) = file_path {
-        let file = File::open(path)?;
-        let reader = BufReader::new(file);
-        for line in reader.lines() {
-            let barcode = line?.trim().to_string();
-            barcodes.insert(barcode);
-        }
-    }
-    Ok(barcodes)
-}
+mod data_loader;
+mod junction;
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Set up command-line arguments using clap
@@ -144,7 +98,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     info!("Maximum loci (NH): {}", max_loci);
     // Load cell barcodes of interest
     let cell_barcodes_of_interest = if mode == "single" {
-        let barcodes = load_cell_barcodes(cell_barcode_file)?;
+        let barcodes = data_loader::load_cell_barcodes(cell_barcode_file)?;
         info!(
             "Cell barcodes of interest: {}",
             if barcodes.is_empty() {
@@ -302,7 +256,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                         supported_junctions.insert(junction_coords.clone());
                         if let Some(buffered) = buffered_reads.remove(&junction_coords) {
                             for (buffered_cb, _buffered_pos) in buffered {
-                                process_junction(
+                                junction::process_junction(
                                     &junction_coords,
                                     buffered_cb.as_ref(),
                                     &mut junction_counts,
@@ -317,7 +271,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
                     // Process or buffer the current read
                     if supported_junctions.contains(&junction_coords) {
-                        process_junction(
+                        junction::process_junction(
                             &junction_coords,
                             cell_barcode.as_ref(),
                             &mut junction_counts,
