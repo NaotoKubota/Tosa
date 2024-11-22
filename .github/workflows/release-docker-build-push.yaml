@@ -21,17 +21,18 @@ jobs:
 
       - name: Bump version and push tag
         id: tag_version
+        env:
+          GITHUB_TOKEN: ${{ secrets.GH_PAT }}
+          VERSION: ${{ steps.get_tag.outputs.tag }}
         run: |
           NEW_TAG=$(cat VERSION)
           echo "New tag is $NEW_TAG"
-          echo "::set-output name=NEW_TAG::$NEW_TAG"
+          echo "NEW_TAG=$NEW_TAG" >> $GITHUB_ENV
           git config user.name "github-actions"
           git config user.email "github-actions@github.com"
           git tag -a $NEW_TAG -m "Release $NEW_TAG"
-          git remote set-url origin https://${{ github.actor }}:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}
+          git remote set-url origin https://${GITHUB_TOKEN}@github.com/${{ github.repository }}
           git push origin $NEW_TAG
-        env:
-          VERSION: ${{ steps.get_tag.outputs.tag }}
 
       - name: Debug NEW_TAG
         run: echo "The new tag is $NEW_TAG"
@@ -40,7 +41,7 @@ jobs:
         id: create_release
         uses: actions/create-release@v1.1.0
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.GH_PAT }}
         with:
           tag_name: ${{ steps.tag_version.outputs.NEW_TAG }}
           release_name: ${{ steps.tag_version.outputs.NEW_TAG }}
