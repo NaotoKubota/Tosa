@@ -17,13 +17,14 @@ jobs:
 
       - name: Get the latest tag
         id: get_tag
-        run: echo ::set-output name=tag::$(git describe --tags `git rev-list --tags --max-count=1`)
+        run: |
+          TAG=$(git describe --tags `git rev-list --tags --max-count=1`)
+          echo "tag=$TAG" >> $GITHUB_ENV
 
       - name: Bump version and push tag
         id: tag_version
         env:
-          GITHUB_TOKEN: ${{ secrets.GH_PAT }}
-          VERSION: ${{ steps.get_tag.outputs.tag }}
+          GH_PAT: ${{ secrets.GH_PAT }}
         run: |
           NEW_TAG=$(cat VERSION)
           echo "New tag is $NEW_TAG"
@@ -31,11 +32,12 @@ jobs:
           git config user.name "github-actions"
           git config user.email "github-actions@github.com"
           git tag -a $NEW_TAG -m "Release $NEW_TAG"
-          git remote set-url origin https://${GITHUB_TOKEN}@github.com/${{ github.repository }}
+          git remote set-url origin https://${GH_PAT}@github.com/${{ github.repository }}
           git push origin $NEW_TAG
 
       - name: Debug NEW_TAG
-        run: echo "The new tag is $NEW_TAG"
+        run: |
+          echo "The new tag is $NEW_TAG"
 
       - name: Create GitHub release
         id: create_release
