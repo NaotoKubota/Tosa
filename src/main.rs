@@ -1,5 +1,6 @@
 use clap::{Arg, Command};
 use rust_htslib::bam::{self, Read};
+use rust_htslib::bam::IndexedReader;
 use rust_htslib::bam::record::{Aux, Cigar};
 use std::collections::{HashMap, HashSet};
 use std::fs::File;
@@ -112,13 +113,13 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         HashSet::new()
     };
 
-    // Count total reads in the BAM file in a preliminary pass
-    info!("Counting total reads in the BAM file");
-    let total_reads = {
-        let mut bam_reader = bam::Reader::from_path(bam_file)?;
-        bam_reader.records().count()
-    };
-    info!("Total number of reads: {}", total_reads);
+    // Count total mapped reads in the BAM file
+    let mut bam_index_reader = IndexedReader::from_path(bam_file)?;
+    let stats = bam_index_reader.index_stats()?;
+    debug!("stats: {:?}", stats);
+    // Sum the mapped reads from all targets
+    let total_mapped_reads: u64 = stats.iter().map(|(_, _, mapped, _)| mapped).sum();
+    info!("Total number of reads: {}", total_mapped_reads);
 
     // Open the BAM file again for processing
     let mut bam_reader = bam::Reader::from_path(bam_file)?;
@@ -153,21 +154,21 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         read_count += 1;
 
         // Calculate and log progress at each 1% increment
-        let progress_percentage = (read_count * 100) / total_reads;
+        let progress_percentage = (read_count * 100) / total_mapped_reads;
         if progress_percentage > last_percentage {
-            info!("Progress: {}% ({} / {})", progress_percentage, read_count, total_reads);
+            info!("Progress: {}% ({} / {})", progress_percentage, read_count, total_mapped_reads);
             last_percentage = progress_percentage;
         }
 
         // Skip read if NH tag exceeds max_loci
         if let Ok(Aux::U8(nh)) = record.aux(b"NH") {
             if nh > max_loci as u8 {
-                debug!("Skipping read {} with NH > max_loci ({})", std::str::from_utf8(record.qname()).unwrap(), nh);
+                // debug!("Skipping read {} with NH > max_loci ({})", std::str::from_utf8(record.qname()).unwrap(), nh);
                 continue; // Skip this read
             }
         } else if let Ok(Aux::I32(nh)) = record.aux(b"NH") {
             if nh > max_loci as i32 {
-                debug!("Skipping read {} with NH > max_loci ({})", std::str::from_utf8(record.qname()).unwrap(), nh);
+                // debug!("Skipping read {} with NH > max_loci ({})", std::str::from_utf8(record.qname()).unwrap(), nh);
                 continue; // Skip this read
             }
         }
