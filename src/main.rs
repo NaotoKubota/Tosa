@@ -1,6 +1,5 @@
 use clap::{Arg, Command};
 use rust_htslib::bam::{self, Read};
-use rust_htslib::bam::IndexedReader;
 use rust_htslib::bam::record::{Aux, Cigar};
 use std::collections::{HashMap, HashSet};
 use std::fs::File;
@@ -114,11 +113,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     };
 
     // Count total mapped reads in the BAM file
-    let mut bam_index_reader = IndexedReader::from_path(bam_file)?;
-    let stats = bam_index_reader.index_stats()?;
-    debug!("stats: {:?}", stats);
-    // Sum the mapped reads from all targets
-    let total_mapped_reads: u64 = stats.iter().map(|(_, _, mapped, _)| mapped).sum();
+    let total_mapped_reads = data_loader::count_total_mapped_reads(bam_file)?;
     info!("Total number of reads: {}", total_mapped_reads);
 
     // Open the BAM file again for processing
