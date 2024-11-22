@@ -2,7 +2,7 @@
 
 All notable changes to this Tosa project will be documented in this file.
 
-## [v0.2.0] - 2024-??-??
+## [v0.2.0] - 2024-11-21
 
 ### Added
 

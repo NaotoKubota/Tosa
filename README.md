@@ -1,7 +1,12 @@
 [![GitHub License](https://img.shields.io/github/license/NaotoKubota/Tosa)](https://github.com/NaotoKubota/Tosa/blob/main/LICENSE)
+[![GitHub Release](https://img.shields.io/github/v/release/NaotoKubota/Tosa?style=flat)](https://github.com/NaotoKubota/Tosa/releases)
+[![GitHub Release Date](https://img.shields.io/github/release-date/NaotoKubota/Tosa)](https://github.com/NaotoKubota/Tosa/releases)
 [![Rust](https://github.com/NaotoKubota/Tosa/actions/workflows/rust.yaml/badge.svg)](https://github.com/NaotoKubota/Tosa/actions/workflows/rust.yaml)
+[![Create Release and Build Docker Image](https://github.com/NaotoKubota/Tosa/actions/workflows/release-docker-build-push.yaml/badge.svg)](https://github.com/NaotoKubota/Tosa/actions/workflows/release-docker-build-push.yaml)
+[![Docker Pulls](https://img.shields.io/docker/pulls/naotokubota/tosa)](https://hub.docker.com/r/naotokubota/tosa)
+[![Docker Image Size](https://img.shields.io/docker/image-size/naotokubota/tosa)](https://hub.docker.com/r/naotokubota/tosa)
 
-# Tosa (v0.1.0)
+# Tosa (v0.2.0)
 
 Rust implementation of junction read counting from RNA-seq BAM files.
 
@@ -46,7 +51,7 @@ cargo build --release
 
 ```bash
 # Count junction reads from bulk RNA-seq BAM file
-./target/release/tosa bulk -a 8 -m 70 -M 500000 example.bam output_example
+./target/release/tosa bulk example.bam output_example
 # Count junction reads from single-cell RNA-seq BAM file
-./target/release/tosa single -a 8 -m 70 -M 500000 example.bam output_example
+./target/release/tosa single example.bam output_example
 ```
