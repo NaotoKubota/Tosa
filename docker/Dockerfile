@@ -16,7 +16,7 @@ RUN apt-get -qq update && \
     build-essential gcc g++ make cmake libtool texinfo dpkg-dev pkg-config \
     libgsl-dev wget locate less vim zlib1g-dev bzip2 lzma curl perl git \
     libboost-dev libcurl4-openssl-dev libboost-all-dev libbz2-dev liblzma-dev \
-    libpcre3 libpcre3-dev
+    libpcre3 libpcre3-dev libclang-dev
 
 # Install Tosa
 RUN mkdir -p /opt_tosa && \
