@@ -18,7 +18,11 @@ jobs:
       - name: Get the latest tag
         id: get_tag
         run: |
-          TAG=$(git describe --tags `git rev-list --tags --max-count=1`)
+          TAG=$(git tag --list | sort -V | tail -n 1)
+          if [ -z "$TAG" ]; then
+            echo "No tags found. Setting default tag to v0.1.0"
+            TAG="v0.1.0"
+          fi
           echo "tag=$TAG" >> $GITHUB_ENV
 
       - name: Bump version and push tag
