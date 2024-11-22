@@ -1,4 +1,5 @@
 [![GitHub License](https://img.shields.io/github/license/NaotoKubota/Tosa)](https://github.com/NaotoKubota/Tosa/blob/main/LICENSE)
+[![DOI](https://zenodo.org/badge/888699325.svg)](https://doi.org/10.5281/zenodo.14202094)
 [![GitHub Release](https://img.shields.io/github/v/release/NaotoKubota/Tosa?style=flat)](https://github.com/NaotoKubota/Tosa/releases)
 [![GitHub Release Date](https://img.shields.io/github/release-date/NaotoKubota/Tosa)](https://github.com/NaotoKubota/Tosa/releases)
 [![Rust](https://github.com/NaotoKubota/Tosa/actions/workflows/rust.yaml/badge.svg)](https://github.com/NaotoKubota/Tosa/actions/workflows/rust.yaml)
