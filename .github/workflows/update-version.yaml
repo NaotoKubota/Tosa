@@ -44,7 +44,8 @@ jobs:
       - name: Update Tosa with new version
         run: |
           NEW_VERSION=${{ steps.read_version.outputs.NEW_VERSION }}
-          sed -i "s/\"v[0-9]*\.[0-9]*\.[0-9]*\"/\"${NEW_VERSION}\"/" src/main.rs
+          NEW_VERSION=${NEW_VERSION#v}
+          sed -i "s/\"[0-9]*\.[0-9]*\.[0-9]*\"/\"${NEW_VERSION}\"/" src/main.rs
 
       - name: Update Dockerfile with new version
         run: |
