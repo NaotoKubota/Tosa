@@ -2,15 +2,21 @@
 name = "tosa"
 version = "0.1.0"
 edition = "2021"
+authors = ["Naoto Kubota <naotok@ucr.edu>"]
+description = "A tool for quantifying junction reads from bulk and single-cell RNA-seq data"
+lisense-file = "LICENSE"
+readme = "README.md"
+keywards = ["splicing", "RNA-seq", "single-cell", "junction reads", "preprocessing"]
+categories = ["command-line-utilities", "science::bioinformatics::genomics", "science::bioinformatics::sequence-analysis"]
 
 [dependencies]
-clap = "4.0"  # Replace with the latest version if needed
+clap = "4.0"
 log = "0.4"
 env_logger = "0.10"
-rust-htslib = "0.48"  # Replace with the appropriate version you're using
+rust-htslib = "0.48"
 itertools = "0.10"
 flate2 = "1.0"
 
 [[bin]]
-name = "tosa" # This is the binary name
-path = "src/main.rs" # Path to your main entry point
+name = "tosa"
+path = "src/main.rs"
