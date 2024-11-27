@@ -2,6 +2,18 @@
 
 All notable changes to this Tosa project will be documented in this file.
 
+## [v0.2.1] - 2024-??-??
+
+### Added
+
+### Changed
+
+- Output directory is now specified by `--output-dir` instead of `--output-prefix`
+
+### Fixed
+
+- Fix barcode index mapping in sparse matrix data processing
+
 ## [v0.2.0] - 2024-11-21
 
 ### Added
