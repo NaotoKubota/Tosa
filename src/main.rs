@@ -339,7 +339,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
         // Add sparse matrix data and TSV data to the buffers
         debug!("Writing matrix.mtx.gz and junction_barcodes.tsv.gz");
-        let barcode_map: HashMap<_, _> = barcode_list.iter().enumerate().map(|(i, b)| (b.as_str(), i + 1)).collect();
+        let barcode_map: HashMap<_, _> = barcode_list.iter().enumerate().map(|(i, b)| (b.as_str(), i)).collect();
         tsv_buffer.push("Feature\tBarcode\tCount".to_string());
         for (i, feature) in feature_list.iter().enumerate() {
             if let Some(cell_counts) = junction_counts.get(*feature) {
