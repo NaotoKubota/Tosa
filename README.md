@@ -7,7 +7,7 @@
 [![Docker Pulls](https://img.shields.io/docker/pulls/naotokubota/tosa)](https://hub.docker.com/r/naotokubota/tosa)
 [![Docker Image Size](https://img.shields.io/docker/image-size/naotokubota/tosa)](https://hub.docker.com/r/naotokubota/tosa)
 
-# Tosa (v0.2.0)
+# Tosa (v0.3.0)
 
 Rust implementation of junction read counting from RNA-seq BAM files.
 

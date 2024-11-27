@@ -17,7 +17,7 @@ mod junction;
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Set up command-line arguments using clap
     let matches = Command::new("tosa")
-        .version("0.2.0")
+        .version("0.3.0")
         .author("NaotoKubota")
         .about("Extract junction reads from RNA-seq/scRNA-seq bam files")
         .arg(Arg::new("mode")
