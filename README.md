@@ -7,7 +7,7 @@
 [![Docker Pulls](https://img.shields.io/docker/pulls/naotokubota/tosa)](https://hub.docker.com/r/naotokubota/tosa)
 [![Docker Image Size](https://img.shields.io/docker/image-size/naotokubota/tosa)](https://hub.docker.com/r/naotokubota/tosa)
 
-# Tosa (v0.2.0)
+# Tosa (v0.3.0)
 
 Rust implementation of junction read counting from RNA-seq BAM files.
 
@@ -16,12 +16,12 @@ Rust implementation of junction read counting from RNA-seq BAM files.
 ```bash
 Extract junction reads from RNA-seq/scRNA-seq bam files
 
-Usage: tosa [OPTIONS] <mode> <bam_file> <output_prefix>
+Usage: tosa [OPTIONS] <mode> <bam_file> <output_dir>
 
 Arguments:
-  <mode>           Mode of operation: 'bulk' or 'single' [possible values: bulk, single]
-  <bam_file>       Path to the BAM file
-  <output_prefix>  Output prefix for the output files
+  <mode>        Mode of operation: 'bulk' or 'single' [possible values: bulk, single]
+  <bam_file>    Path to the BAM file
+  <output_dir>  Output directory for the output files
 
 Options:
   -a, --anchor-length <anchor_length>

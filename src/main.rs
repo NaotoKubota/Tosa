@@ -17,7 +17,7 @@ mod junction;
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Set up command-line arguments using clap
     let matches = Command::new("tosa")
-        .version("0.2.0")
+        .version("0.3.0")
         .author("NaotoKubota")
         .about("Extract junction reads from RNA-seq/scRNA-seq bam files")
         .arg(Arg::new("mode")
@@ -27,9 +27,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         .arg(Arg::new("bam_file")
             .required(true)
             .help("Path to the BAM file"))
-        .arg(Arg::new("output_prefix")
+        .arg(Arg::new("output_dir")
             .required(true)
-            .help("Output prefix for the output files"))
+            .help("Output directory for the output files"))
         .arg(Arg::new("anchor_length")
             .short('a')
             .long("anchor-length")
@@ -69,7 +69,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Parse arguments
     let mode = matches.get_one::<String>("mode").unwrap();
     let bam_file = matches.get_one::<String>("bam_file").unwrap();
-    let output_prefix = matches.get_one::<String>("output_prefix").unwrap();
+    let output_dir = matches.get_one::<String>("output_dir").unwrap();
     let cell_barcode_file = matches.get_one::<String>("cell_barcode_file");
     let min_anchor_length = *matches.get_one::<i64>("anchor_length").unwrap();
     let min_intron_length = *matches.get_one::<i64>("min_intron_length").unwrap();
@@ -92,7 +92,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     info!("Running tosa");
     info!("Mode: {}", mode);
     info!("BAM file: {}", bam_file);
-    info!("Output prefix: {}", output_prefix);
+    info!("Output prefix: {}", output_dir);
     info!("Minimum anchor length: {}", min_anchor_length);
     info!("Minimum intron length: {}",min_intron_length);
     info!("Maximum intron length: {}", max_intron_length);
@@ -304,10 +304,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     info!("Writing output files");
     if mode == "single" {
         // Prepare output files with compression
-        let mut matrix_file = GzEncoder::new(File::create(format!("{}_matrix.mtx.gz", output_prefix))?, Compression::default());
-        let mut barcodes_file = GzEncoder::new(File::create(format!("{}_barcodes.tsv.gz", output_prefix))?, Compression::default());
-        let mut features_file = GzEncoder::new(File::create(format!("{}_features.tsv.gz", output_prefix))?, Compression::default());
-        let mut output_tsv = GzEncoder::new(File::create(format!("{}_junction_barcodes.tsv.gz", output_prefix))?, Compression::default());
+        let mut matrix_file = GzEncoder::new(File::create(format!("{}/matrix.mtx.gz", output_dir))?, Compression::default());
+        let mut barcodes_file = GzEncoder::new(File::create(format!("{}/barcodes.tsv.gz", output_dir))?, Compression::default());
+        let mut features_file = GzEncoder::new(File::create(format!("{}/features.tsv.gz", output_dir))?, Compression::default());
+        let mut output_tsv = GzEncoder::new(File::create(format!("{}/junction_barcodes.tsv.gz", output_dir))?, Compression::default());
 
         // Write barcodes.tsv.gz
         debug!("Writing barcodes.tsv.gz");
@@ -339,7 +339,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
         // Add sparse matrix data and TSV data to the buffers
         debug!("Writing matrix.mtx.gz and junction_barcodes.tsv.gz");
-        let barcode_map: HashMap<_, _> = barcode_list.iter().enumerate().map(|(i, b)| (b.as_str(), i + 1)).collect();
+        let barcode_map: HashMap<_, _> = barcode_list.iter().enumerate().map(|(i, b)| (b.as_str(), i)).collect();
         tsv_buffer.push("Feature\tBarcode\tCount".to_string());
         for (i, feature) in feature_list.iter().enumerate() {
             if let Some(cell_counts) = junction_counts.get(*feature) {
@@ -361,7 +361,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
 
     } else if mode == "bulk" {
-        let mut output_file = GzEncoder::new(File::create(format!("{}_junction.tsv.gz", output_prefix))?, Compression::default());
+        let mut output_file = GzEncoder::new(File::create(format!("{}/junction.tsv.gz", output_dir))?, Compression::default());
         debug!("Writing junction.tsv.gz");
         writeln!(output_file, "Junction\tCount")?;
         for (junction, count) in junction_totals.iter().sorted() {
