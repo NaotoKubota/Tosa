@@ -1,16 +1,26 @@
 [package]
 name = "tosa"
-version = "0.1.0"
+version = "0.3.0"
 edition = "2021"
+description = "Fast junction and exon-intron boundary read counting from RNA-seq/scRNA-seq BAM files"
+repository = "https://github.com/NaotoKubota/Tosa"
+license = "MIT"
+readme = "README.md"
+keywords = ["bioinformatics", "rna-seq", "junction", "splicing", "bam"]
+categories = ["command-line-utilities", "science"]
 
 [dependencies]
-clap = "4.0"  # Replace with the latest version if needed
+clap = "4.0"
 log = "0.4"
 env_logger = "0.10"
-rust-htslib = "0.48"  # Replace with the appropriate version you're using
+rust-htslib = "0.48"
 itertools = "0.10"
 flate2 = "1.0"
 
+[dev-dependencies]
+tempfile = "3"
+version-sync = "0.9"
+
 [[bin]]
-name = "tosa" # This is the binary name
-path = "src/main.rs" # Path to your main entry point
+name = "tosa"
+path = "src/main.rs"
