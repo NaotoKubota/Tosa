@@ -23,7 +23,7 @@ Fast junction and exon-intron boundary read counting from RNA-seq/scRNA-seq BAM 
 
 ## Usage
 
-```text
+```
 Extract junction and boundary reads from RNA-seq/scRNA-seq BAM files
 
 Usage: tosa [OPTIONS] <mode> <bam_file> <output_prefix>
@@ -55,7 +55,7 @@ Options:
           Print help
   -V, --version
           Print version
-```text
+```
 
 ## Installation
 
@@ -125,3 +125,15 @@ Boundary coordinates use 1-base intervals at intron ends. For example, intron `c
 
 - 5' boundary: `chr2:6545675-6545676`
 - 3' boundary: `chr2:6547041-6547042`
+
+## License
+
+MIT License
+
+## Contributing
+
+Thank you for wanting to improve Tosa! If you have any bugs or questions, feel free to [open an issue](https://github.com/NaotoKubota/Tosa/issues) or pull request.
+
+## Authors
+
+- Naoto Kubota ([0000-0003-0612-2300](https://orcid.org/0000-0003-0612-2300))
