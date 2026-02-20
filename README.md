@@ -1,4 +1,3 @@
-<<<<<<< HEAD
 # Tosa
 
 [![GitHub Release](https://img.shields.io/github/v/release/NaotoKubota/Tosa?style=flat)](https://github.com/NaotoKubota/Tosa/releases)
@@ -12,20 +11,7 @@
 [![Docker Pulls](https://img.shields.io/docker/pulls/naotokubota/tosa)](https://hub.docker.com/r/naotokubota/tosa)
 [![Docker Image Size](https://img.shields.io/docker/image-size/naotokubota/tosa)](https://hub.docker.com/r/naotokubota/tosa)
 
-
 Fast junction and exon-intron boundary read counting from RNA-seq/scRNA-seq BAM files.
-=======
-[![GitHub License](https://img.shields.io/github/license/NaotoKubota/Tosa)](https://github.com/NaotoKubota/Tosa/blob/main/LICENSE)
-[![DOI](https://zenodo.org/badge/888699325.svg)](https://doi.org/10.5281/zenodo.14202094)
-[![GitHub Release](https://img.shields.io/github/v/release/NaotoKubota/Tosa?style=flat)](https://github.com/NaotoKubota/Tosa/releases)
-[![GitHub Release Date](https://img.shields.io/github/release-date/NaotoKubota/Tosa)](https://github.com/NaotoKubota/Tosa/releases)
-[![Rust](https://github.com/NaotoKubota/Tosa/actions/workflows/rust.yaml/badge.svg)](https://github.com/NaotoKubota/Tosa/actions/workflows/rust.yaml)
-[![Create Release and Build Docker Image](https://github.com/NaotoKubota/Tosa/actions/workflows/release-docker-build-push.yaml/badge.svg)](https://github.com/NaotoKubota/Tosa/actions/workflows/release-docker-build-push.yaml)
-[![Docker Pulls](https://img.shields.io/docker/pulls/naotokubota/tosa)](https://hub.docker.com/r/naotokubota/tosa)
-[![Docker Image Size](https://img.shields.io/docker/image-size/naotokubota/tosa)](https://hub.docker.com/r/naotokubota/tosa)
-
-# Tosa (v0.3.0)
->>>>>>> 33a432e75c1c3be5acd1d209fd1f1af23b49563d
 
 ## Features
 
@@ -40,12 +26,12 @@ Fast junction and exon-intron boundary read counting from RNA-seq/scRNA-seq BAM 
 ```text
 Extract junction and boundary reads from RNA-seq/scRNA-seq BAM files
 
-Usage: tosa [OPTIONS] <mode> <bam_file> <output_dir>
+Usage: tosa [OPTIONS] <mode> <bam_file> <output_prefix>
 
 Arguments:
-  <mode>        Mode of operation: 'bulk' or 'single' [possible values: bulk, single]
-  <bam_file>    Path to the BAM file
-  <output_dir>  Output directory for the output files
+  <mode>           Mode of operation: 'bulk' or 'single' [possible values: bulk, single]
+  <bam_file>       Path to the BAM file
+  <output_prefix>  Output prefix for the output files
 
 Options:
   -a, --anchor-length <anchor_length>
@@ -107,7 +93,6 @@ gunzip -c output_example_boundary.tsv.gz | head
 ## More examples
 
 ```bash
-<<<<<<< HEAD
 # Count junction reads with strand specificity (first-strand library)
 tosa bulk -s RF input.bam output_prefix
 
@@ -116,12 +101,6 @@ tosa bulk -s RF -g annotation.gtf input.bam output_prefix
 
 # Count junction reads from single-cell RNA-seq BAM file
 tosa single -c barcodes.tsv input.bam output_prefix
-=======
-# Count junction reads from bulk RNA-seq BAM file
-./target/release/tosa bulk example.bam output_example
-# Count junction reads from single-cell RNA-seq BAM file
-./target/release/tosa single example.bam output_example
->>>>>>> 33a432e75c1c3be5acd1d209fd1f1af23b49563d
 ```
 
 ## Output

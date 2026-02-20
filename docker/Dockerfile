@@ -1,9 +1,5 @@
 ###############################################################
-<<<<<<< HEAD
 # Dockerfile to build container images for Tosa
-=======
-# Dockerfile to build container images for Tosa (v0.3.0)
->>>>>>> 33a432e75c1c3be5acd1d209fd1f1af23b49563d
 # Based on rust slim-bullseye
 ################################################################
 
@@ -22,17 +18,9 @@ RUN apt-get -qq update && \
     libboost-dev libcurl4-openssl-dev libboost-all-dev libbz2-dev liblzma-dev \
     libpcre3 libpcre3-dev libclang-dev
 
-<<<<<<< HEAD
 # Copy source code and build
 COPY . /opt_tosa/Tosa
 RUN cd /opt_tosa/Tosa && \
-=======
-# Install Tosa
-RUN mkdir -p /opt_tosa && \
-    cd /opt_tosa && \
-    git clone https://github.com/NaotoKubota/Tosa.git -b v0.3.0 && \
-    cd Tosa && \
->>>>>>> 33a432e75c1c3be5acd1d209fd1f1af23b49563d
     cargo build --release && \
     cp target/release/tosa /usr/local/bin/ && \
     rm -rf /opt_tosa

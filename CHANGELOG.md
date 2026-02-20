@@ -2,7 +2,6 @@
 
 All notable changes to this Tosa project will be documented in this file.
 
-<<<<<<< HEAD
 ## [v0.4.0] - 2026-XX-XX
 
 ### Added
@@ -28,8 +27,6 @@ All notable changes to this Tosa project will be documented in this file.
 - Fixed `Cigar::Ins` incorrectly advancing reference position (insertions don't consume reference bases).
 - Fixed off-by-one error in single-cell mode barcode indexing for MatrixMarket output.
 
-=======
->>>>>>> 33a432e75c1c3be5acd1d209fd1f1af23b49563d
 ## [v0.3.0] - 2024-11-27
 
 ### Added
