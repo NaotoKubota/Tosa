@@ -1,11 +1,10 @@
 name: Rust
 
 on:
-  push:
-    branches: [ "main" ]
   pull_request:
-    branches: [ "main" ]
-
+    types: [closed]
+    branches:
+      - main
 env:
   CARGO_TERM_COLOR: always
 
