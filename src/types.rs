@@ -100,3 +100,41 @@ pub struct RunConfig {
     /// Enable verbose (debug) logging.
     pub verbose: bool,
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_strand_mode_from_str_opt() {
+        let rf = "RF".to_string();
+        let fr = "FR".to_string();
+        let xs = "XS".to_string();
+
+        assert_eq!(StrandMode::from_str_opt(Some(&rf)), StrandMode::RF);
+        assert_eq!(StrandMode::from_str_opt(Some(&fr)), StrandMode::FR);
+        assert_eq!(StrandMode::from_str_opt(Some(&xs)), StrandMode::XS);
+        assert_eq!(StrandMode::from_str_opt(None), StrandMode::Unstranded);
+    }
+
+    #[test]
+    fn test_boundary_type_display() {
+        assert_eq!(format!("{}", BoundaryType::FivePrime), "5p");
+        assert_eq!(format!("{}", BoundaryType::ThreePrime), "3p");
+    }
+
+    #[test]
+    fn test_strand_display() {
+        assert_eq!(format!("{}", Strand::Plus), "+");
+        assert_eq!(format!("{}", Strand::Minus), "-");
+        assert_eq!(format!("{}", Strand::Unknown), ".");
+    }
+
+    #[test]
+    fn test_strand_mode_display() {
+        assert_eq!(format!("{}", StrandMode::Unstranded), "unstranded");
+        assert_eq!(format!("{}", StrandMode::XS), "XS");
+        assert_eq!(format!("{}", StrandMode::RF), "RF");
+        assert_eq!(format!("{}", StrandMode::FR), "FR");
+    }
+}

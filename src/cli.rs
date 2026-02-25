@@ -81,3 +81,86 @@ pub fn parse_config(matches: &clap::ArgMatches) -> RunConfig {
         verbose: matches.get_flag("verbose"),
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_build_cli_defaults() {
+        let matches = build_cli().get_matches_from([
+            "tosa", "bulk", "test.bam", "out_prefix",
+        ]);
+        let config = parse_config(&matches);
+
+        assert_eq!(config.mode, "bulk");
+        assert_eq!(config.bam_file, "test.bam");
+        assert_eq!(config.output_prefix, "out_prefix");
+        assert_eq!(config.min_anchor_length, 8);
+        assert_eq!(config.min_intron_length, 70);
+        assert_eq!(config.max_intron_length, 500000);
+        assert_eq!(config.max_loci, 1);
+        assert_eq!(config.cell_barcode_file, None);
+        assert_eq!(config.strand_mode, StrandMode::Unstranded);
+        assert_eq!(config.gtf_file, None);
+        assert!(!config.verbose);
+    }
+
+    #[test]
+    fn test_build_cli_all_options() {
+        let matches = build_cli().get_matches_from([
+            "tosa",
+            "-a", "10",
+            "-m", "50",
+            "-M", "1000000",
+            "-l", "3",
+            "-c", "barcodes.tsv",
+            "-s", "RF",
+            "-g", "annotation.gtf",
+            "-v",
+            "single", "input.bam", "output",
+        ]);
+        let config = parse_config(&matches);
+
+        assert_eq!(config.mode, "single");
+        assert_eq!(config.bam_file, "input.bam");
+        assert_eq!(config.output_prefix, "output");
+        assert_eq!(config.min_anchor_length, 10);
+        assert_eq!(config.min_intron_length, 50);
+        assert_eq!(config.max_intron_length, 1000000);
+        assert_eq!(config.max_loci, 3);
+        assert_eq!(config.cell_barcode_file, Some("barcodes.tsv".to_string()));
+        assert_eq!(config.strand_mode, StrandMode::RF);
+        assert_eq!(config.gtf_file, Some("annotation.gtf".to_string()));
+        assert!(config.verbose);
+    }
+
+    #[test]
+    fn test_parse_config_strand_modes() {
+        // FR
+        let matches = build_cli().get_matches_from([
+            "tosa", "-s", "FR", "bulk", "t.bam", "o",
+        ]);
+        assert_eq!(parse_config(&matches).strand_mode, StrandMode::FR);
+
+        // XS
+        let matches = build_cli().get_matches_from([
+            "tosa", "-s", "XS", "bulk", "t.bam", "o",
+        ]);
+        assert_eq!(parse_config(&matches).strand_mode, StrandMode::XS);
+
+        // Unstranded (no -s flag)
+        let matches = build_cli().get_matches_from([
+            "tosa", "bulk", "t.bam", "o",
+        ]);
+        assert_eq!(parse_config(&matches).strand_mode, StrandMode::Unstranded);
+    }
+
+    #[test]
+    fn test_build_cli_invalid_mode() {
+        let result = build_cli().try_get_matches_from([
+            "tosa", "invalid", "test.bam", "out",
+        ]);
+        assert!(result.is_err());
+    }
+}

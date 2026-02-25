@@ -4,6 +4,7 @@
 [![GitHub Release Date](https://img.shields.io/github/release-date/NaotoKubota/Tosa)](https://github.com/NaotoKubota/Tosa/releases)
 [![Create Release](https://github.com/NaotoKubota/Tosa/actions/workflows/release.yml/badge.svg)](https://github.com/NaotoKubota/Tosa/actions/workflows/release.yml)
 [![Rust](https://github.com/NaotoKubota/Tosa/actions/workflows/rust.yaml/badge.svg)](https://github.com/NaotoKubota/Tosa/actions/workflows/rust.yaml)
+[![codecov](https://codecov.io/gh/NaotoKubota/Tosa/branch/main/graph/badge.svg)](https://codecov.io/gh/NaotoKubota/Tosa)
 [![Publish to crates.io](https://github.com/NaotoKubota/Tosa/actions/workflows/publish.yml/badge.svg)](https://github.com/NaotoKubota/Tosa/actions/workflows/publish.yml)
 [![crates.io](https://img.shields.io/crates/v/tosa)](https://crates.io/crates/tosa)
 [![GitHub License](https://img.shields.io/github/license/NaotoKubota/Tosa)](https://github.com/NaotoKubota/Tosa/blob/main/LICENSE)

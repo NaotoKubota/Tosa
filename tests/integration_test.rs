@@ -441,3 +441,260 @@ fn test_single_output_write() {
     assert!(jb_content.contains("BBBB-1\t3"));
     assert!(jb_content.contains("CCCC-1\t5"));
 }
+
+// ===========================================================================
+// 11. Bulk boundary output round-trip (write + verify)
+// ===========================================================================
+#[test]
+fn test_bulk_boundary_output_write() {
+    use std::collections::HashMap;
+    use tosa::types::{Strand, BoundaryType};
+
+    let tmpdir = tempfile::tempdir().unwrap();
+    let prefix = tmpdir.path().join("test_boundary").to_str().unwrap().to_string();
+
+    let mut boundary_totals = HashMap::new();
+    boundary_totals.insert("chr1:1200-1201".to_string(), 5u32);
+    boundary_totals.insert("chr1:1498-1499".to_string(), 3u32);
+
+    let mut boundary_types = HashMap::new();
+    boundary_types.insert("chr1:1200-1201".to_string(), BoundaryType::FivePrime);
+    boundary_types.insert("chr1:1498-1499".to_string(), BoundaryType::ThreePrime);
+
+    let mut boundary_strands = HashMap::new();
+    boundary_strands.insert("chr1:1200-1201".to_string(), Strand::Plus);
+    boundary_strands.insert("chr1:1498-1499".to_string(), Strand::Plus);
+
+    tosa::output::write_boundary_bulk(
+        &prefix,
+        &boundary_totals,
+        &boundary_types,
+        &boundary_strands,
+    )
+    .unwrap();
+
+    let output_path = format!("{}_boundary.tsv.gz", prefix);
+    assert!(std::path::Path::new(&output_path).exists(), "Boundary output file should exist");
+
+    use std::io::Read;
+    use flate2::read::GzDecoder;
+    let file = std::fs::File::open(&output_path).unwrap();
+    let mut decoder = GzDecoder::new(file);
+    let mut content = String::new();
+    decoder.read_to_string(&mut content).unwrap();
+
+    assert!(content.contains("Boundary\tType\tStrand\tCount"), "Should have header");
+    assert!(content.contains("chr1:1200-1201\t5p\t+\t5"), "Should have 5' boundary entry");
+    assert!(content.contains("chr1:1498-1499\t3p\t+\t3"), "Should have 3' boundary entry");
+}
+
+// ===========================================================================
+// 12. Single-cell boundary output round-trip
+// ===========================================================================
+#[test]
+fn test_single_boundary_output_write() {
+    use std::collections::HashMap;
+    use tosa::types::{Strand, BoundaryType};
+
+    let tmpdir = tempfile::tempdir().unwrap();
+    let prefix = tmpdir.path().join("sc_boundary").to_str().unwrap().to_string();
+
+    let mut boundary_counts: HashMap<String, HashMap<String, u32>> = HashMap::new();
+    boundary_counts
+        .entry("chr1:1200-1201".to_string())
+        .or_default()
+        .insert("AAAA-1".to_string(), 4);
+    boundary_counts
+        .entry("chr1:1498-1499".to_string())
+        .or_default()
+        .insert("BBBB-1".to_string(), 2);
+
+    let mut cell_barcodes = HashSet::new();
+    cell_barcodes.insert("AAAA-1".to_string());
+    cell_barcodes.insert("BBBB-1".to_string());
+
+    let mut boundary_types = HashMap::new();
+    boundary_types.insert("chr1:1200-1201".to_string(), BoundaryType::FivePrime);
+    boundary_types.insert("chr1:1498-1499".to_string(), BoundaryType::ThreePrime);
+
+    let mut boundary_strands = HashMap::new();
+    boundary_strands.insert("chr1:1200-1201".to_string(), Strand::Plus);
+    boundary_strands.insert("chr1:1498-1499".to_string(), Strand::Plus);
+
+    tosa::output::write_boundary_single(
+        &prefix,
+        &boundary_counts,
+        &cell_barcodes,
+        &boundary_types,
+        &boundary_strands,
+    )
+    .unwrap();
+
+    use std::io::Read;
+    use flate2::read::GzDecoder;
+
+    // Verify boundary_matrix.mtx.gz
+    let mtx_path = format!("{}_boundary_matrix.mtx.gz", prefix);
+    assert!(std::path::Path::new(&mtx_path).exists());
+    let mut content = String::new();
+    GzDecoder::new(std::fs::File::open(&mtx_path).unwrap())
+        .read_to_string(&mut content)
+        .unwrap();
+    assert!(content.contains("%%MatrixMarket"));
+    assert!(content.contains("2 2 2"), "Matrix dimensions should be 2×2 with 2 entries");
+
+    // Verify boundary_barcodes.tsv.gz
+    let bc_path = format!("{}_boundary_barcodes.tsv.gz", prefix);
+    let mut bc_content = String::new();
+    GzDecoder::new(std::fs::File::open(&bc_path).unwrap())
+        .read_to_string(&mut bc_content)
+        .unwrap();
+    assert!(bc_content.contains("AAAA-1"));
+    assert!(bc_content.contains("BBBB-1"));
+
+    // Verify boundary_features.tsv.gz
+    let feat_path = format!("{}_boundary_features.tsv.gz", prefix);
+    let mut feat_content = String::new();
+    GzDecoder::new(std::fs::File::open(&feat_path).unwrap())
+        .read_to_string(&mut feat_content)
+        .unwrap();
+    assert!(feat_content.contains("chr1:1200-1201\t5p\t+"));
+    assert!(feat_content.contains("chr1:1498-1499\t3p\t+"));
+
+    // Verify boundary_barcodes_detail.tsv.gz
+    let detail_path = format!("{}_boundary_barcodes_detail.tsv.gz", prefix);
+    let mut detail_content = String::new();
+    GzDecoder::new(std::fs::File::open(&detail_path).unwrap())
+        .read_to_string(&mut detail_content)
+        .unwrap();
+    assert!(detail_content.contains("Boundary\tType\tStrand\tBarcode\tCount"));
+    assert!(detail_content.contains("AAAA-1\t4"));
+    assert!(detail_content.contains("BBBB-1\t2"));
+}
+
+// ===========================================================================
+// 13. Run pipeline – bulk mode (end-to-end via lib::run)
+// ===========================================================================
+#[test]
+fn test_run_bulk_mode() {
+    let tmpdir = tempfile::tempdir().unwrap();
+    let prefix = tmpdir.path().join("run_bulk").to_str().unwrap().to_string();
+
+    let config = tosa::types::RunConfig {
+        mode: "bulk".to_string(),
+        bam_file: test_bam_path(),
+        output_prefix: prefix.clone(),
+        min_anchor_length: 8,
+        min_intron_length: 70,
+        max_intron_length: 500000,
+        max_loci: 1,
+        cell_barcode_file: None,
+        strand_mode: tosa::types::StrandMode::Unstranded,
+        gtf_file: Some(test_gtf_path()),
+        verbose: false,
+    };
+
+    tosa::run(&config).unwrap();
+
+    // Verify junction output
+    let junction_path = format!("{}_junction.tsv.gz", prefix);
+    assert!(std::path::Path::new(&junction_path).exists());
+
+    // Verify boundary output
+    let boundary_path = format!("{}_boundary.tsv.gz", prefix);
+    assert!(std::path::Path::new(&boundary_path).exists());
+}
+
+// ===========================================================================
+// 14. Run pipeline – bulk mode without GTF
+// ===========================================================================
+#[test]
+fn test_run_bulk_no_gtf() {
+    let tmpdir = tempfile::tempdir().unwrap();
+    let prefix = tmpdir.path().join("run_bulk_no_gtf").to_str().unwrap().to_string();
+
+    let config = tosa::types::RunConfig {
+        mode: "bulk".to_string(),
+        bam_file: test_bam_path(),
+        output_prefix: prefix.clone(),
+        min_anchor_length: 8,
+        min_intron_length: 70,
+        max_intron_length: 500000,
+        max_loci: 1,
+        cell_barcode_file: None,
+        strand_mode: tosa::types::StrandMode::Unstranded,
+        gtf_file: None,
+        verbose: false,
+    };
+
+    tosa::run(&config).unwrap();
+
+    let junction_path = format!("{}_junction.tsv.gz", prefix);
+    assert!(std::path::Path::new(&junction_path).exists());
+
+    // No boundary output when GTF is not provided
+    let boundary_path = format!("{}_boundary.tsv.gz", prefix);
+    assert!(!std::path::Path::new(&boundary_path).exists());
+}
+
+// ===========================================================================
+// 15. Run pipeline – single-cell mode
+// ===========================================================================
+#[test]
+fn test_run_single_mode() {
+    let tmpdir = tempfile::tempdir().unwrap();
+    let prefix = tmpdir.path().join("run_single").to_str().unwrap().to_string();
+
+    let config = tosa::types::RunConfig {
+        mode: "single".to_string(),
+        bam_file: test_bam_path(),
+        output_prefix: prefix.clone(),
+        min_anchor_length: 8,
+        min_intron_length: 70,
+        max_intron_length: 500000,
+        max_loci: 1,
+        cell_barcode_file: Some(test_barcodes_path()),
+        strand_mode: tosa::types::StrandMode::Unstranded,
+        gtf_file: Some(test_gtf_path()),
+        verbose: false,
+    };
+
+    tosa::run(&config).unwrap();
+
+    // Verify junction output files
+    assert!(std::path::Path::new(&format!("{}_matrix.mtx.gz", prefix)).exists());
+    assert!(std::path::Path::new(&format!("{}_barcodes.tsv.gz", prefix)).exists());
+    assert!(std::path::Path::new(&format!("{}_features.tsv.gz", prefix)).exists());
+
+    // Verify boundary output files
+    assert!(std::path::Path::new(&format!("{}_boundary_matrix.mtx.gz", prefix)).exists());
+    assert!(std::path::Path::new(&format!("{}_boundary_barcodes.tsv.gz", prefix)).exists());
+    assert!(std::path::Path::new(&format!("{}_boundary_features.tsv.gz", prefix)).exists());
+}
+
+// ===========================================================================
+// 16. Run pipeline – single-cell mode without barcodes file
+// ===========================================================================
+#[test]
+fn test_run_single_no_barcode_file() {
+    let tmpdir = tempfile::tempdir().unwrap();
+    let prefix = tmpdir.path().join("run_single_nobc").to_str().unwrap().to_string();
+
+    let config = tosa::types::RunConfig {
+        mode: "single".to_string(),
+        bam_file: test_bam_path(),
+        output_prefix: prefix.clone(),
+        min_anchor_length: 8,
+        min_intron_length: 70,
+        max_intron_length: 500000,
+        max_loci: 1,
+        cell_barcode_file: None,
+        strand_mode: tosa::types::StrandMode::Unstranded,
+        gtf_file: None,
+        verbose: false,
+    };
+
+    tosa::run(&config).unwrap();
+
+    assert!(std::path::Path::new(&format!("{}_matrix.mtx.gz", prefix)).exists());
+}

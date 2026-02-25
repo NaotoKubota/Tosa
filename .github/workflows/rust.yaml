@@ -27,3 +27,13 @@ jobs:
       run: cargo test --verbose
     - name: Clippy
       run: cargo clippy -- -D warnings
+    - name: Install cargo-tarpaulin
+      run: cargo install cargo-tarpaulin
+    - name: Generate coverage report
+      run: cargo tarpaulin --out xml --output-dir coverage
+    - name: Upload coverage to Codecov
+      uses: codecov/codecov-action@v5
+      with:
+        token: ${{ secrets.CODECOV_TOKEN }}
+        files: coverage/cobertura.xml
+        fail_ci_if_error: true

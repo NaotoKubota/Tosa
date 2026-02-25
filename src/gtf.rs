@@ -155,6 +155,9 @@ mod tests {
 
     #[test]
     fn test_parse_gtf_simple() {
+        let _ = env_logger::Builder::from_default_env()
+            .filter_level(log::LevelFilter::Info)
+            .try_init();
         // Create a minimal GTF file with one gene, one transcript, three exons
         let gtf_content = "\
 chr1\tensembl\tgene\t1001\t5000\t.\t+\t.\tgene_id \"GENE1\"; transcript_id \"TX1\";
@@ -228,5 +231,72 @@ chr1\tensembl\texon\t2001\t2200\t.\t+\t.\tgene_id \"G1\"; transcript_id \"TX1\";
         let boundary_index = parse_gtf(tmpfile.path().to_str().unwrap()).unwrap();
         let overlapping = boundary_index.find_overlapping("chr1", 1100, 1300);
         assert_eq!(overlapping.len(), 1);
+    }
+
+    #[test]
+    fn test_parse_gtf_short_lines() {
+        // Lines with fewer than 9 tab-separated fields should be skipped
+        let gtf_content = "\
+short_line\twithout\tenough\tfields
+chr1\tensembl\texon\t1001\t1200\t.\t+\t.\tgene_id \"G1\"; transcript_id \"TX1\";
+chr1\tensembl\texon\t2001\t2200\t.\t+\t.\tgene_id \"G1\"; transcript_id \"TX1\";
+";
+        let mut tmpfile = NamedTempFile::new().unwrap();
+        write!(tmpfile, "{}", gtf_content).unwrap();
+
+        let boundary_index = parse_gtf(tmpfile.path().to_str().unwrap()).unwrap();
+        let overlapping = boundary_index.find_overlapping("chr1", 1100, 1300);
+        assert_eq!(overlapping.len(), 1);
+    }
+
+    #[test]
+    fn test_parse_gtf_unknown_strand() {
+        // Exons with strand "." should be parsed as Strand::Unknown
+        let gtf_content = "\
+chr1\tensembl\texon\t1001\t1200\t.\t.\t.\tgene_id \"G1\"; transcript_id \"TX1\";
+chr1\tensembl\texon\t2001\t2200\t.\t.\t.\tgene_id \"G1\"; transcript_id \"TX1\";
+";
+        let mut tmpfile = NamedTempFile::new().unwrap();
+        write!(tmpfile, "{}", gtf_content).unwrap();
+
+        let boundary_index = parse_gtf(tmpfile.path().to_str().unwrap()).unwrap();
+        let overlapping = boundary_index.find_overlapping("chr1", 1100, 1300);
+        assert_eq!(overlapping.len(), 1);
+        // Verify the boundary has Unknown strand
+        assert_eq!(overlapping[0].strand, Strand::Unknown);
+    }
+
+    #[test]
+    fn test_parse_gtf_overlapping_exons() {
+        // Adjacent/overlapping exons where intron_start >= intron_end should produce no intron
+        let gtf_content = "\
+chr1\tensembl\texon\t1001\t1200\t.\t+\t.\tgene_id \"G1\"; transcript_id \"TX1\";
+chr1\tensembl\texon\t1200\t1400\t.\t+\t.\tgene_id \"G1\"; transcript_id \"TX1\";
+";
+        let mut tmpfile = NamedTempFile::new().unwrap();
+        write!(tmpfile, "{}", gtf_content).unwrap();
+
+        let boundary_index = parse_gtf(tmpfile.path().to_str().unwrap()).unwrap();
+        // No intron gap between the two exons, so no boundaries
+        assert!(
+            !boundary_index.boundaries.contains_key("chr1") ||
+            boundary_index.find_overlapping("chr1", 0, 10000).is_empty()
+        );
+    }
+
+    #[test]
+    fn test_parse_gtf_single_exon_transcript() {
+        // A transcript with only one exon should produce no introns/boundaries
+        let gtf_content = "\
+chr1\tensembl\texon\t1001\t1200\t.\t+\t.\tgene_id \"G1\"; transcript_id \"TX1\";
+";
+        let mut tmpfile = NamedTempFile::new().unwrap();
+        write!(tmpfile, "{}", gtf_content).unwrap();
+
+        let boundary_index = parse_gtf(tmpfile.path().to_str().unwrap()).unwrap();
+        assert!(
+            !boundary_index.boundaries.contains_key("chr1") ||
+            boundary_index.find_overlapping("chr1", 0, 10000).is_empty()
+        );
     }
 }

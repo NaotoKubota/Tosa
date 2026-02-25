@@ -192,4 +192,12 @@ mod tests {
         assert_eq!(coords, "chrX:5000-6000");
         assert_eq!(strand, ".");
     }
+
+    #[test]
+    fn test_parse_junction_key_no_colon() {
+        // Key with no colon should return the whole key as coords and "." as strand
+        let (coords, strand) = parse_junction_key("no_colon_key");
+        assert_eq!(coords, "no_colon_key");
+        assert_eq!(strand, ".");
+    }
 }
