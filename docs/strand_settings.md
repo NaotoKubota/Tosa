@@ -23,6 +23,8 @@ The `-s`/`--strand` option specifies the strand specificity of your RNA-seq libr
 
 ## How Tosa determines strand from RF / FR
 
+The table below shows how Tosa infers the **gene strand** (+ or −) from the mapping orientation of each read. For example, if your library is RF and Read 1 maps to the reverse strand, Tosa assigns the junction to a **+** strand gene.
+
 | Mode | Read 1 reverse | Read 1 forward | Read 2 reverse | Read 2 forward |
 |---|---|---|---|---|
 | **RF** (first-strand) | **+** | **−** | **−** | **+** |
