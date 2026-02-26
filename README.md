@@ -104,6 +104,29 @@ tosa bulk -s RF -g annotation.gtf input.bam output_prefix
 tosa single -c barcodes.tsv input.bam output_prefix
 ```
 
+## Strand settings
+
+The `-s`/`--strand` option specifies the strand specificity of your RNA-seq library. Choosing the correct setting is critical for accurate strand-aware junction and boundary counting.
+
+| Tosa `-s` option | Library type | Description |
+|---|---|---|
+| *(omit)* | Unstranded | No strand information used |
+| `XS` | Any | Use the `XS` auxiliary tag set by the aligner (e.g., HISAT2, STAR) |
+| `RF` | First-strand (dUTP) | Read 1 maps to the reverse complement of the transcript |
+| `FR` | Second-strand (ligation) | Read 1 maps to the transcript strand |
+
+For a detailed reference — including correspondence tables for other tools (HISAT2, HTSeq, featureCounts, Salmon, etc.) and common library kits — see **[Strand Settings — Detailed Reference](docs/strand_settings.md)**.
+
+> [!TIP]
+> If you are unsure about your library's strandedness, you can infer it from your data using
+> [check_strandedness](https://github.com/betsig/how_are_we_stranded_here) or by inspecting
+> read orientations in [IGV](https://igv.org/).
+> The detailed strand settings reference is adapted from the comprehensive
+> [Strand Settings](https://rnabio.org/module-09-appendix/0009/12/01/StrandSettings/) page
+> by the [Griffith Lab](http://www.griffithlab.org/) (Washington University) as part of their
+> [RNA-seq Bioinformatics](https://rnabio.org/) course — an invaluable resource for the community.
+
+
 ## Output
 
 ### Junction output (bulk mode)
