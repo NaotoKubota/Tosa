@@ -189,11 +189,11 @@ pub fn process_bam_records(
 
         // Chromosome-change eviction: when we move to a new chromosome in a
         // coordinate-sorted BAM, all previous-chromosome data is no longer needed.
+        // Note: junction_has_left/right_anchor must NOT be cleared here because
+        // they are used at output time (after all chromosomes are processed).
         if tid as i32 != last_tid {
             processed_reads.clear();
             processed_boundary_reads.clear();
-            junction_has_left_anchor.clear();
-            junction_has_right_anchor.clear();
             last_tid = tid as i32;
         }
 
