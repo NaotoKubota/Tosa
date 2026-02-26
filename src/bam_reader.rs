@@ -133,9 +133,11 @@ pub fn process_bam_records(
     let mut junction_totals: HashMap<JunctionKey, u32> = HashMap::new();
     let mut junction_strands: HashMap<JunctionKey, Strand> = HashMap::new();
     let mut cell_barcodes: HashSet<String> = HashSet::new();
-    let mut supported_junctions: HashSet<JunctionKey> = HashSet::new();
-    // Buffered reads: stores (cell_barcode, position, strand, read_name_hash) per junction.
-    let mut buffered_reads: HashMap<JunctionKey, Vec<(Option<String>, i64, Strand, u64)>> = HashMap::new();
+    // Per-junction anchor tracking (regtools-style): a junction is reported
+    // when *any* read provides a left anchor >= threshold AND *any* read
+    // (possibly a different one) provides a right anchor >= threshold.
+    let mut junction_has_left_anchor: HashMap<JunctionKey, bool> = HashMap::new();
+    let mut junction_has_right_anchor: HashMap<JunctionKey, bool> = HashMap::new();
     // Dedup via u64 hash of read names instead of full String storage.
     let mut processed_reads: HashMap<JunctionKey, HashSet<u64>> = HashMap::new();
 
@@ -190,8 +192,8 @@ pub fn process_bam_records(
         if tid as i32 != last_tid {
             processed_reads.clear();
             processed_boundary_reads.clear();
-            buffered_reads.clear();
-            supported_junctions.clear();
+            junction_has_left_anchor.clear();
+            junction_has_right_anchor.clear();
             last_tid = tid as i32;
         }
 
@@ -241,12 +243,14 @@ pub fn process_bam_records(
                     }
 
                     // Calculate left anchor length
+                    // Note: Cigar::Diff (X = sequence mismatch) breaks the anchor,
+                    // consistent with regtools which does not allow mismatches in anchors.
                     let mut left_anchor_length: i64 = 0;
                     let mut j = i;
                     while j > 0 {
                         j -= 1;
                         match cigars[j] {
-                            Cigar::Match(l) | Cigar::Equal(l) | Cigar::Diff(l) => {
+                            Cigar::Match(l) | Cigar::Equal(l) => {
                                 left_anchor_length += *l as i64;
                                 if left_anchor_length >= config.min_anchor_length {
                                     break;
@@ -263,7 +267,7 @@ pub fn process_bam_records(
                     let mut k = i + 1;
                     while k < cigars.len() {
                         match cigars[k] {
-                            Cigar::Match(r) | Cigar::Equal(r) | Cigar::Diff(r) => {
+                            Cigar::Match(r) | Cigar::Equal(r) => {
                                 right_anchor_length += *r as i64;
                                 if right_anchor_length >= config.min_anchor_length {
                                     break;
@@ -286,51 +290,26 @@ pub fn process_bam_records(
                         strand,
                     };
 
-                    if has_left_anchor && has_right_anchor {
-                        // Mark as supported and process buffered reads
-                        supported_junctions.insert(jkey);
-                        junction_strands.entry(jkey).or_insert(strand);
-
-                        if let Some(buffered) = buffered_reads.remove(&jkey) {
-                            for (buffered_cb, _buffered_pos, buffered_strand, buffered_hash) in buffered {
-                                // Use the buffered read's own JunctionKey with its strand
-                                let buffered_key = JunctionKey {
-                                    tid: tid as u32,
-                                    start,
-                                    end,
-                                    strand: buffered_strand,
-                                };
-                                junction_strands.entry(buffered_key).or_insert(buffered_strand);
-                                junction::process_junction(
-                                    buffered_key,
-                                    buffered_cb.as_ref(),
-                                    &mut junction_counts,
-                                    &mut junction_totals,
-                                    &mut processed_reads,
-                                    buffered_hash,
-                                    config.mode,
-                                );
-                            }
-                        }
+                    // Per-junction anchor tracking (regtools-style):
+                    // OR-accumulate left/right anchor flags across all reads.
+                    {
+                        let left_flag = junction_has_left_anchor.entry(jkey).or_insert(false);
+                        *left_flag = *left_flag || has_left_anchor;
+                        let right_flag = junction_has_right_anchor.entry(jkey).or_insert(false);
+                        *right_flag = *right_flag || has_right_anchor;
                     }
 
-                    // Process or buffer the current read
-                    if supported_junctions.contains(&jkey) {
-                        junction::process_junction(
-                            jkey,
-                            cell_barcode.as_ref(),
-                            &mut junction_counts,
-                            &mut junction_totals,
-                            &mut processed_reads,
-                            read_name_hash,
-                            config.mode,
-                        );
-                    } else {
-                        buffered_reads
-                            .entry(jkey)
-                            .or_default()
-                            .push((cell_barcode.clone(), current_pos, strand, read_name_hash));
-                    }
+                    // Always count the read; filtering happens at output time.
+                    junction_strands.entry(jkey).or_insert(strand);
+                    junction::process_junction(
+                        jkey,
+                        cell_barcode.as_ref(),
+                        &mut junction_counts,
+                        &mut junction_totals,
+                        &mut processed_reads,
+                        read_name_hash,
+                        config.mode,
+                    );
                     current_pos += intron_length;
                 } else if let Cigar::SoftClip(_) = cigars[i] {
                     // SoftClip does not consume reference bases
@@ -365,19 +344,30 @@ pub fn process_bam_records(
         }
     }
 
+    // Filter junctions: only emit those where at least one read provided a
+    // sufficient left anchor AND at least one read provided a sufficient right
+    // anchor (regtools-style per-junction filtering).
+    let anchor_pass = |k: &JunctionKey| -> bool {
+        *junction_has_left_anchor.get(k).unwrap_or(&false)
+            && *junction_has_right_anchor.get(k).unwrap_or(&false)
+    };
+
     // Convert JunctionKey-keyed maps to String-keyed maps for output compatibility
     let junction_totals_out: HashMap<String, u32> = junction_totals
         .into_iter()
+        .filter(|(k, _)| anchor_pass(k))
         .map(|(k, v)| (k.to_string_key(&reference_names), v))
         .collect();
 
     let junction_strands_out: HashMap<String, Strand> = junction_strands
         .into_iter()
+        .filter(|(k, _)| anchor_pass(k))
         .map(|(k, v)| (k.to_string_key(&reference_names), v))
         .collect();
 
     let junction_counts_out: HashMap<String, HashMap<String, u32>> = junction_counts
         .into_iter()
+        .filter(|(k, _)| anchor_pass(k))
         .map(|(k, v)| (k.to_string_key(&reference_names), v))
         .collect();
 
@@ -792,10 +782,12 @@ mod tests {
             25,
         ));
 
-        // 9-10) Buffered→Supported junction transition
-        //   bad_anchor (pos=5000): 10M 100N 3M → right anchor 3<8 → BUFFERED (L301-304)
-        //   good_anchor (pos=5000): 10M 100N 10M → both 10>=8 → SUPPORTED + FLUSH (L271-281)
-        //   Both start at same pos, share junction chr1:5011-5110
+        // 9-10) Per-junction anchor tracking (regtools-style)
+        //   bad_anchor (pos=5000): 10M 100N 3M → left=10>=8, right=3<8
+        //   good_anchor (pos=5000): 10M 100N 10M → left=10>=8, right=10>=8
+        //   Both share junction chr1:5011-5110
+        //   Per-junction: left OK (both reads), right OK (good_anchor) → junction reported
+        //   Both reads are counted.
         records.push(make_record(
             b"bad_anchor", 0, 0, 5000,
             vec![Cigar::Match(10), Cigar::RefSkip(100), Cigar::Match(3)],
@@ -845,15 +837,142 @@ mod tests {
         // Junction keys include strand suffix ":." for Unstranded mode
         assert!(result.junction_totals.contains_key("chr1:5011-5110:."),
             "Expected junction chr1:5011-5110:., got: {:?}", result.junction_totals.keys().collect::<Vec<_>>());
-        // Both bad_anchor (buffered then flushed) and good_anchor are counted.
-        // Each has a distinct read_name_hash, so dedup allows both.
+        // Per-junction anchor: bad_anchor provides left anchor, good_anchor provides both.
+        // Both reads are always counted (filtering is at junction level, not read level).
         assert_eq!(*result.junction_totals.get("chr1:5011-5110:.").unwrap(), 2);
 
         // refskip_left produces junction at chr1:511-610 and chr1:614-813
         // refskip_right produces: pos=800, Match(10)→810, RefSkip(200): junction at chr1:811-1010
-        // right anchor: 3+skip+10=13>=8 via L253
+        // right anchor: 3+skip+10=13>=8 (RefSkip spans into next exon)
         assert!(result.junction_totals.contains_key("chr1:811-1010:."),
             "Expected junction chr1:811-1010:. from refskip_right");
+    }
+
+    // ---------------------------------------------------------------
+    // Per-junction anchor: different reads provide left / right
+    // ---------------------------------------------------------------
+    #[test]
+    fn test_per_junction_anchor_from_different_reads() {
+        let tmpdir = tempfile::tempdir().unwrap();
+        let bam_path = tmpdir.path().join("perjunc.bam");
+        let bam_str = bam_path.to_str().unwrap();
+
+        let mut records: Vec<bam::Record> = Vec::new();
+
+        // Read A: left=10>=8, right=3<8  → provides left anchor only
+        records.push(make_record(
+            b"read_a", 0, 0, 6000,
+            vec![Cigar::Match(10), Cigar::RefSkip(100), Cigar::Match(3)],
+            13,
+        ));
+
+        // Read B: left=3<8, right=10>=8  → provides right anchor only
+        // Same junction: chr1:6011-6110
+        // left anchor: 3M only (no preceding RefSkip to span)
+        records.push(make_record(
+            b"read_b", 0, 0, 6007,
+            vec![Cigar::Match(3), Cigar::RefSkip(100), Cigar::Match(10)],
+            13,
+        ));
+
+        write_indexed_bam(bam_str, &records);
+
+        let config = crate::types::RunConfig {
+            mode: crate::types::Mode::Bulk,
+            bam_file: bam_str.to_string(),
+            output_prefix: tmpdir.path().join("out").to_str().unwrap().to_string(),
+            min_anchor_length: 8,
+            min_intron_length: 70,
+            max_intron_length: 500000,
+            max_loci: 1,
+            cell_barcode_file: None,
+            strand_mode: StrandMode::Unstranded,
+            gtf_file: None,
+            verbose: false,
+        };
+
+        let result = process_bam_records(
+            &config,
+            &HashSet::new(),
+            None,
+        ).unwrap();
+
+        // Per-junction: Read A provides left>=8, Read B provides right>=8 → reported
+        assert!(result.junction_totals.contains_key("chr1:6011-6110:."),
+            "Expected per-junction anchor to report chr1:6011-6110:., got: {:?}",
+            result.junction_totals.keys().collect::<Vec<_>>());
+        // Both reads counted
+        assert_eq!(*result.junction_totals.get("chr1:6011-6110:.").unwrap(), 2);
+    }
+
+    // ---------------------------------------------------------------
+    // Cigar::Diff (X = mismatch) breaks anchor accumulation
+    // ---------------------------------------------------------------
+    #[test]
+    fn test_diff_breaks_anchor() {
+        let tmpdir = tempfile::tempdir().unwrap();
+        let bam_path = tmpdir.path().join("diff.bam");
+        let bam_str = bam_path.to_str().unwrap();
+
+        let mut records: Vec<bam::Record> = Vec::new();
+
+        // CIGAR: 10M 1X 3M 200N 10M
+        // Left anchor for 200N: backwards → 3M (3<8), Diff(1X) → break
+        // Left anchor = 3 < 8 → left anchor fails
+        // Right anchor = 10 >= 8 → right anchor passes
+        // With only one read, the junction lacks a left anchor → NOT reported
+        records.push(make_record(
+            b"diff_left", 0, 0, 7000,
+            vec![
+                Cigar::Match(10), Cigar::Diff(1), Cigar::Match(3),
+                Cigar::RefSkip(200), Cigar::Match(10),
+            ],
+            24,
+        ));
+
+        // CIGAR: 10M 200N 3M 1X 10M
+        // Right anchor for 200N: forwards → 3M (3<8), Diff(1X) → break
+        // Right anchor = 3 < 8 → right anchor fails
+        // Left anchor = 10 >= 8 → left anchor passes
+        // With only one read, the junction lacks a right anchor → NOT reported
+        records.push(make_record(
+            b"diff_right", 0, 0, 7500,
+            vec![
+                Cigar::Match(10), Cigar::RefSkip(200), Cigar::Match(3),
+                Cigar::Diff(1), Cigar::Match(10),
+            ],
+            24,
+        ));
+
+        write_indexed_bam(bam_str, &records);
+
+        let config = crate::types::RunConfig {
+            mode: crate::types::Mode::Bulk,
+            bam_file: bam_str.to_string(),
+            output_prefix: tmpdir.path().join("out").to_str().unwrap().to_string(),
+            min_anchor_length: 8,
+            min_intron_length: 70,
+            max_intron_length: 500000,
+            max_loci: 1,
+            cell_barcode_file: None,
+            strand_mode: StrandMode::Unstranded,
+            gtf_file: None,
+            verbose: false,
+        };
+
+        let result = process_bam_records(
+            &config,
+            &HashSet::new(),
+            None,
+        ).unwrap();
+
+        // diff_left: junction chr1:7014-7213 — only right anchor → not reported (no left)
+        assert!(!result.junction_totals.contains_key("chr1:7014-7213:."),
+            "Diff should break left anchor; junction chr1:7014-7213 should NOT be reported");
+
+        // diff_right: junction chr1:7511-7710 — only left anchor → not reported (no right)
+        assert!(!result.junction_totals.contains_key("chr1:7511-7710:."),
+            "Diff should break right anchor; junction chr1:7511-7710 should NOT be reported");
     }
 
     // ---------------------------------------------------------------
