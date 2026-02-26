@@ -21,7 +21,7 @@ pub mod output;
 use std::collections::HashSet;
 use log::info;
 
-use types::RunConfig;
+use types::{Mode, RunConfig};
 
 /// Run the Tosa pipeline with the given configuration.
 ///
@@ -40,7 +40,7 @@ pub fn run(config: &RunConfig) -> Result<(), Box<dyn std::error::Error>> {
     info!("Strand mode: {}", config.strand_mode);
 
     // Load cell barcodes of interest (single mode only)
-    let cell_barcodes_of_interest = if config.mode == "single" {
+    let cell_barcodes_of_interest = if config.mode == Mode::Single {
         let barcodes = data_loader::load_cell_barcodes(config.cell_barcode_file.as_ref())?;
         info!(
             "Cell barcodes of interest: {}",
@@ -72,7 +72,7 @@ pub fn run(config: &RunConfig) -> Result<(), Box<dyn std::error::Error>> {
 
     // Write output files
     info!("Writing output files");
-    if config.mode == "single" {
+    if config.mode == Mode::Single {
         output::write_junction_single(
             &config.output_prefix,
             &result.junction_counts,
@@ -143,7 +143,7 @@ mod tests {
         let prefix = tmpdir.path().join("lib_bulk").to_str().unwrap().to_string();
 
         let config = types::RunConfig {
-            mode: "bulk".to_string(),
+            mode: types::Mode::Bulk,
             bam_file: test_bam_path(),
             output_prefix: prefix,
             min_anchor_length: 8,
@@ -170,7 +170,7 @@ mod tests {
         let prefix = tmpdir.path().join("lib_single").to_str().unwrap().to_string();
 
         let config = types::RunConfig {
-            mode: "single".to_string(),
+            mode: types::Mode::Single,
             bam_file: test_bam_path(),
             output_prefix: prefix,
             min_anchor_length: 8,

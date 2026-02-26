@@ -62,7 +62,7 @@ fn test_barcodes_path() -> String {
 // ---------------------------------------------------------------------------
 fn bulk_config(strand: tosa::types::StrandMode, gtf: Option<String>) -> tosa::types::RunConfig {
     tosa::types::RunConfig {
-        mode: "bulk".to_string(),
+        mode: tosa::types::Mode::Bulk,
         bam_file: test_bam_path(),
         output_prefix: "/dev/null".to_string(),
         min_anchor_length: 8,
@@ -242,7 +242,7 @@ fn single_config(
     barcode_file: Option<String>,
 ) -> tosa::types::RunConfig {
     tosa::types::RunConfig {
-        mode: "single".to_string(),
+        mode: tosa::types::Mode::Single,
         bam_file: test_bam_path(),
         output_prefix: "/dev/null".to_string(),
         min_anchor_length: 8,
@@ -581,7 +581,7 @@ fn test_run_bulk_mode() {
     let prefix = tmpdir.path().join("run_bulk").to_str().unwrap().to_string();
 
     let config = tosa::types::RunConfig {
-        mode: "bulk".to_string(),
+        mode: tosa::types::Mode::Bulk,
         bam_file: test_bam_path(),
         output_prefix: prefix.clone(),
         min_anchor_length: 8,
@@ -614,7 +614,7 @@ fn test_run_bulk_no_gtf() {
     let prefix = tmpdir.path().join("run_bulk_no_gtf").to_str().unwrap().to_string();
 
     let config = tosa::types::RunConfig {
-        mode: "bulk".to_string(),
+        mode: tosa::types::Mode::Bulk,
         bam_file: test_bam_path(),
         output_prefix: prefix.clone(),
         min_anchor_length: 8,
@@ -646,7 +646,7 @@ fn test_run_single_mode() {
     let prefix = tmpdir.path().join("run_single").to_str().unwrap().to_string();
 
     let config = tosa::types::RunConfig {
-        mode: "single".to_string(),
+        mode: tosa::types::Mode::Single,
         bam_file: test_bam_path(),
         output_prefix: prefix.clone(),
         min_anchor_length: 8,
@@ -681,7 +681,7 @@ fn test_run_single_no_barcode_file() {
     let prefix = tmpdir.path().join("run_single_nobc").to_str().unwrap().to_string();
 
     let config = tosa::types::RunConfig {
-        mode: "single".to_string(),
+        mode: tosa::types::Mode::Single,
         bam_file: test_bam_path(),
         output_prefix: prefix.clone(),
         min_anchor_length: 8,

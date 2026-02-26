@@ -1,54 +1,41 @@
 //! Junction read counting logic.
 
 use std::collections::{HashMap, HashSet};
-use crate::types::Strand;
+#[allow(unused_imports)] // Used by tests via `use super::*`
+use crate::types::{JunctionKey, Mode, Strand};
 
 /// Process a junction read, incrementing counts and tracking duplicates.
 ///
-/// Junctions are keyed by `(junction_coords, strand)` internally.
-/// Duplicate reads (same read name for same junction) are counted only once.
-#[allow(clippy::too_many_arguments)]
+/// Duplicate reads (same read-name hash for same junction) are counted only once.
 pub fn process_junction(
-    junction_coords: &str,
+    key: JunctionKey,
     cell_barcode: Option<&String>,
-    strand: Strand,
-    junction_counts: &mut HashMap<String, HashMap<String, u32>>,
-    junction_totals: &mut HashMap<String, u32>,
-    junction_strands: &mut HashMap<String, Strand>,
-    processed_reads: &mut HashMap<String, HashSet<String>>,
-    read_name: &str,
-    mode: &str,
+    junction_counts: &mut HashMap<JunctionKey, HashMap<String, u32>>,
+    junction_totals: &mut HashMap<JunctionKey, u32>,
+    processed_reads: &mut HashMap<JunctionKey, HashSet<u64>>,
+    read_name_hash: u64,
+    mode: Mode,
 ) {
-    // Composite key includes strand to distinguish same-position different-strand junctions
-    let key = format!("{}:{}", junction_coords, strand);
-
-    // Check if the read was already processed for this junction
-    if let Some(reads) = processed_reads.get_mut(&key) {
-        if reads.contains(read_name) {
-            return; // Skip counting
-        }
-        reads.insert(read_name.to_string());
-    } else {
-        let mut reads_set = HashSet::new();
-        reads_set.insert(read_name.to_string());
-        processed_reads.insert(key.clone(), reads_set);
+    // Check if the read was already processed for this junction (via u64 hash)
+    let reads = processed_reads.entry(key).or_default();
+    if !reads.insert(read_name_hash) {
+        return; // Already counted
     }
 
-    // Record strand for this junction key
-    junction_strands.entry(key.clone()).or_insert(strand);
-
     // Count the read for the junction
-    if mode == "single" {
-        if let Some(cb_str) = cell_barcode {
-            let junction_entry = junction_counts
-                .entry(key)
-                .or_default();
-            *junction_entry.entry(cb_str.clone()).or_insert(0) += 1;
+    match mode {
+        Mode::Single => {
+            if let Some(cb_str) = cell_barcode {
+                *junction_counts
+                    .entry(key)
+                    .or_default()
+                    .entry(cb_str.clone())
+                    .or_insert(0) += 1;
+            }
         }
-    } else {
-        *junction_totals
-            .entry(key)
-            .or_insert(0) += 1;
+        Mode::Bulk => {
+            *junction_totals.entry(key).or_insert(0) += 1;
+        }
     }
 }
 
@@ -74,110 +61,103 @@ mod tests {
     fn test_process_junction_bulk() {
         let mut junction_counts = HashMap::new();
         let mut junction_totals = HashMap::new();
-        let mut junction_strands = HashMap::new();
         let mut processed_reads = HashMap::new();
 
+        let key = JunctionKey { tid: 0, start: 100, end: 200, strand: Strand::Plus };
+
         process_junction(
-            "chr1:100-200",
+            key,
             None,
-            Strand::Plus,
             &mut junction_counts,
             &mut junction_totals,
-            &mut junction_strands,
             &mut processed_reads,
-            "read1",
-            "bulk",
+            12345, // read_name_hash
+            Mode::Bulk,
         );
 
-        assert_eq!(junction_totals.get("chr1:100-200:+"), Some(&1));
-        assert_eq!(*junction_strands.get("chr1:100-200:+").unwrap(), Strand::Plus);
+        assert_eq!(junction_totals.get(&key), Some(&1));
     }
 
     #[test]
     fn test_process_junction_dedup() {
         let mut junction_counts = HashMap::new();
         let mut junction_totals = HashMap::new();
-        let mut junction_strands = HashMap::new();
         let mut processed_reads = HashMap::new();
 
-        // Process same read twice for same junction
+        let key = JunctionKey { tid: 0, start: 100, end: 200, strand: Strand::Plus };
+
+        // Process same read hash twice for same junction
         for _ in 0..2 {
             process_junction(
-                "chr1:100-200",
+                key,
                 None,
-                Strand::Plus,
                 &mut junction_counts,
                 &mut junction_totals,
-                &mut junction_strands,
                 &mut processed_reads,
-                "read1",
-                "bulk",
+                12345,
+                Mode::Bulk,
             );
         }
 
         // Should only be counted once
-        assert_eq!(junction_totals.get("chr1:100-200:+"), Some(&1));
+        assert_eq!(junction_totals.get(&key), Some(&1));
     }
 
     #[test]
     fn test_process_junction_different_strands() {
         let mut junction_counts = HashMap::new();
         let mut junction_totals = HashMap::new();
-        let mut junction_strands = HashMap::new();
         let mut processed_reads = HashMap::new();
 
+        let key_plus = JunctionKey { tid: 0, start: 100, end: 200, strand: Strand::Plus };
+        let key_minus = JunctionKey { tid: 0, start: 100, end: 200, strand: Strand::Minus };
+
         process_junction(
-            "chr1:100-200",
+            key_plus,
             None,
-            Strand::Plus,
             &mut junction_counts,
             &mut junction_totals,
-            &mut junction_strands,
             &mut processed_reads,
-            "read1",
-            "bulk",
+            11111,
+            Mode::Bulk,
         );
 
         process_junction(
-            "chr1:100-200",
+            key_minus,
             None,
-            Strand::Minus,
             &mut junction_counts,
             &mut junction_totals,
-            &mut junction_strands,
             &mut processed_reads,
-            "read2",
-            "bulk",
+            22222,
+            Mode::Bulk,
         );
 
         // Same coords, different strand → separate counts
-        assert_eq!(junction_totals.get("chr1:100-200:+"), Some(&1));
-        assert_eq!(junction_totals.get("chr1:100-200:-"), Some(&1));
+        assert_eq!(junction_totals.get(&key_plus), Some(&1));
+        assert_eq!(junction_totals.get(&key_minus), Some(&1));
     }
 
     #[test]
     fn test_process_junction_single_mode() {
         let mut junction_counts = HashMap::new();
         let mut junction_totals = HashMap::new();
-        let mut junction_strands = HashMap::new();
         let mut processed_reads = HashMap::new();
 
+        let key = JunctionKey { tid: 0, start: 100, end: 200, strand: Strand::Unknown };
         let barcode = "ACGT-1".to_string();
+
         process_junction(
-            "chr1:100-200",
+            key,
             Some(&barcode),
-            Strand::Unknown,
             &mut junction_counts,
             &mut junction_totals,
-            &mut junction_strands,
             &mut processed_reads,
-            "read1",
-            "single",
+            12345,
+            Mode::Single,
         );
 
-        let key = "chr1:100-200:.";
         assert_eq!(
-            *junction_counts.get(key).unwrap().get("ACGT-1").unwrap(),
+            *junction_counts.get(&key).unwrap().get("ACGT-1").unwrap(),
             1
         );
     }

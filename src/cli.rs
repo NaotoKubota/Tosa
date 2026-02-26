@@ -1,7 +1,7 @@
 //! CLI argument definition for Tosa.
 
 use clap::{Arg, Command};
-use crate::types::{RunConfig, StrandMode};
+use crate::types::{Mode, RunConfig, StrandMode};
 
 /// Build the CLI command definition.
 pub fn build_cli() -> Command {
@@ -68,7 +68,10 @@ pub fn build_cli() -> Command {
 /// Parse CLI matches into a RunConfig.
 pub fn parse_config(matches: &clap::ArgMatches) -> RunConfig {
     RunConfig {
-        mode: matches.get_one::<String>("mode").unwrap().clone(),
+        mode: match matches.get_one::<String>("mode").unwrap().as_str() {
+            "single" => Mode::Single,
+            _ => Mode::Bulk,
+        },
         bam_file: matches.get_one::<String>("bam_file").unwrap().clone(),
         output_prefix: matches.get_one::<String>("output_prefix").unwrap().clone(),
         min_anchor_length: *matches.get_one::<i64>("anchor_length").unwrap(),
@@ -93,7 +96,7 @@ mod tests {
         ]);
         let config = parse_config(&matches);
 
-        assert_eq!(config.mode, "bulk");
+        assert_eq!(config.mode, Mode::Bulk);
         assert_eq!(config.bam_file, "test.bam");
         assert_eq!(config.output_prefix, "out_prefix");
         assert_eq!(config.min_anchor_length, 8);
@@ -122,7 +125,7 @@ mod tests {
         ]);
         let config = parse_config(&matches);
 
-        assert_eq!(config.mode, "single");
+        assert_eq!(config.mode, Mode::Single);
         assert_eq!(config.bam_file, "input.bam");
         assert_eq!(config.output_prefix, "output");
         assert_eq!(config.min_anchor_length, 10);

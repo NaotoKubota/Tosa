@@ -6,7 +6,7 @@
 //! - 3' boundary: `chr2:6547041-6547042`
 
 use std::collections::{HashMap, HashSet, BTreeMap};
-use crate::types::{BoundaryType, Strand};
+use crate::types::{BoundaryType, Mode, Strand};
 
 /// A single boundary entry derived from GTF annotation.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
@@ -108,40 +108,38 @@ pub fn count_boundaries(
     boundary_totals: &mut HashMap<String, u32>,
     boundary_types: &mut HashMap<String, BoundaryType>,
     boundary_strands: &mut HashMap<String, Strand>,
-    processed_boundary_reads: &mut HashMap<String, HashSet<String>>,
-    read_name: &str,
-    mode: &str,
+    processed_boundary_reads: &mut HashMap<String, HashSet<u64>>,
+    read_name_hash: u64,
+    mode: Mode,
 ) {
     for (seg_start, seg_end) in aligned_segments {
         let overlapping = boundary_index.find_overlapping(chrom, *seg_start, *seg_end);
         for entry in overlapping {
             let key = &entry.boundary_id;
 
-            // Check dedup: same read should not count same boundary twice
-            if let Some(reads) = processed_boundary_reads.get_mut(key) {
-                if reads.contains(read_name) {
-                    continue;
-                }
-                reads.insert(read_name.to_string());
-            } else {
-                let mut reads_set = HashSet::new();
-                reads_set.insert(read_name.to_string());
-                processed_boundary_reads.insert(key.clone(), reads_set);
+            // Check dedup: same read should not count same boundary twice (via u64 hash)
+            let reads = processed_boundary_reads.entry(key.clone()).or_default();
+            if !reads.insert(read_name_hash) {
+                continue;
             }
 
             // Record type and strand
             boundary_types.entry(key.clone()).or_insert(entry.boundary_type);
             boundary_strands.entry(key.clone()).or_insert(strand);
 
-            if mode == "single" {
-                if let Some(cb_str) = cell_barcode {
-                    let boundary_entry = boundary_counts
-                        .entry(key.clone())
-                        .or_default();
-                    *boundary_entry.entry(cb_str.clone()).or_insert(0) += 1;
+            match mode {
+                Mode::Single => {
+                    if let Some(cb_str) = cell_barcode {
+                        *boundary_counts
+                            .entry(key.clone())
+                            .or_default()
+                            .entry(cb_str.clone())
+                            .or_insert(0) += 1;
+                    }
                 }
-            } else {
-                *boundary_totals.entry(key.clone()).or_insert(0) += 1;
+                Mode::Bulk => {
+                    *boundary_totals.entry(key.clone()).or_insert(0) += 1;
+                }
             }
         }
     }
@@ -229,8 +227,8 @@ mod tests {
             &mut boundary_types,
             &mut boundary_strands,
             &mut processed,
-            "read1",
-            "bulk",
+            12345, // read_name_hash
+            Mode::Bulk,
         );
 
         assert_eq!(boundary_totals.get("chr1:1000-1001"), Some(&1));
@@ -251,7 +249,7 @@ mod tests {
 
         let segments = vec![(900, 1100)];
 
-        // Same read twice
+        // Same read hash twice
         for _ in 0..2 {
             count_boundaries(
                 "chr1",
@@ -264,8 +262,8 @@ mod tests {
                 &mut boundary_types,
                 &mut boundary_strands,
                 &mut processed,
-                "read1",
-                "bulk",
+                12345,
+                Mode::Bulk,
             );
         }
 

@@ -6,7 +6,7 @@ use rust_htslib::bam::record::{Aux, Cigar};
 use std::collections::{HashMap, HashSet};
 use log::{info, debug};
 
-use crate::types::{RunConfig, StrandMode, Strand};
+use crate::types::{RunConfig, StrandMode, Strand, Mode, JunctionKey, hash_read_name};
 use crate::junction;
 use crate::boundary::{self, BoundaryIndex};
 
@@ -128,25 +128,32 @@ pub fn process_bam_records(
         .map(|name| String::from_utf8_lossy(name).to_string())
         .collect();
 
-    // Junction state
-    let mut junction_counts: HashMap<String, HashMap<String, u32>> = HashMap::new();
-    let mut junction_totals: HashMap<String, u32> = HashMap::new();
-    let mut junction_strands: HashMap<String, Strand> = HashMap::new();
+    // Junction state — keyed by compact JunctionKey (zero heap per key)
+    let mut junction_counts: HashMap<JunctionKey, HashMap<String, u32>> = HashMap::new();
+    let mut junction_totals: HashMap<JunctionKey, u32> = HashMap::new();
+    let mut junction_strands: HashMap<JunctionKey, Strand> = HashMap::new();
     let mut cell_barcodes: HashSet<String> = HashSet::new();
-    let mut supported_junctions: HashSet<String> = HashSet::new();
-    let mut buffered_reads: HashMap<String, Vec<(Option<String>, i64, Strand)>> = HashMap::new();
-    let mut processed_reads: HashMap<String, HashSet<String>> = HashMap::new();
+    let mut supported_junctions: HashSet<JunctionKey> = HashSet::new();
+    // Buffered reads: stores (cell_barcode, position, strand, read_name_hash) per junction.
+    let mut buffered_reads: HashMap<JunctionKey, Vec<(Option<String>, i64, Strand, u64)>> = HashMap::new();
+    // Dedup via u64 hash of read names instead of full String storage.
+    let mut processed_reads: HashMap<JunctionKey, HashSet<u64>> = HashMap::new();
 
     // Boundary state
     let mut boundary_counts: HashMap<String, HashMap<String, u32>> = HashMap::new();
     let mut boundary_totals: HashMap<String, u32> = HashMap::new();
     let mut boundary_types: HashMap<String, crate::types::BoundaryType> = HashMap::new();
     let mut boundary_strands: HashMap<String, Strand> = HashMap::new();
-    let mut processed_boundary_reads: HashMap<String, HashSet<String>> = HashMap::new();
+    let mut processed_boundary_reads: HashMap<String, HashSet<u64>> = HashMap::new();
 
     // Progress tracking
     let mut read_count: u64 = 0;
     let mut last_percentage: u64 = 0;
+
+    // Chromosome-change eviction: clear dedup data when moving to a new chromosome.
+    let mut last_tid: i32 = -1;
+
+    let is_single = config.mode == Mode::Single;
 
     for result in bam_reader.records() {
         let record = result?;
@@ -177,11 +184,23 @@ pub fn process_bam_records(
         if tid < 0 {
             continue; // Unmapped read
         }
-        let ref_name = reference_names[tid as usize].clone();
+
+        // Chromosome-change eviction: when we move to a new chromosome in a
+        // coordinate-sorted BAM, all previous-chromosome data is no longer needed.
+        if tid as i32 != last_tid {
+            processed_reads.clear();
+            processed_boundary_reads.clear();
+            buffered_reads.clear();
+            supported_junctions.clear();
+            last_tid = tid as i32;
+        }
+
+        // Borrow reference name — no per-read heap allocation
+        let ref_name = &reference_names[tid as usize];
         let mut current_pos = record.pos();
 
         // Extract Cell Barcode (CB) from tags if in single mode
-        let cell_barcode = if config.mode == "single" {
+        let cell_barcode = if is_single {
             match record.aux(b"CB") {
                 Ok(Aux::String(cb_str)) => Some(cb_str.to_string()),
                 _ => None,
@@ -201,14 +220,14 @@ pub fn process_bam_records(
         }
 
         // If a cell barcode is present (for single mode), or always process for bulk mode
-        if config.mode == "bulk" || cell_barcode.is_some() {
+        if !is_single || cell_barcode.is_some() {
             if let Some(cb_str) = &cell_barcode {
                 cell_barcodes.insert(cb_str.clone());
             }
 
             // Determine strand for this read
             let strand = determine_strand(&record, &config.strand_mode);
-            let read_name = std::str::from_utf8(record.qname()).unwrap_or("unknown");
+            let read_name_hash = hash_read_name(record.qname());
 
             // --- Junction extraction from CIGAR ---
             let cigar_view = record.cigar();
@@ -260,48 +279,57 @@ pub fn process_bam_records(
                     // Use 1-based inclusive coordinates for junction IDs
                     let start = current_pos + 1;          // 1-based intron start
                     let end = current_pos + intron_length; // 1-based intron end
-                    let junction_coords = format!("{}:{}-{}", ref_name, start, end);
+                    let jkey = JunctionKey {
+                        tid: tid as u32,
+                        start,
+                        end,
+                        strand,
+                    };
 
                     if has_left_anchor && has_right_anchor {
                         // Mark as supported and process buffered reads
-                        supported_junctions.insert(junction_coords.clone());
-                        junction_strands.entry(junction_coords.clone()).or_insert(strand);
+                        supported_junctions.insert(jkey);
+                        junction_strands.entry(jkey).or_insert(strand);
 
-                        if let Some(buffered) = buffered_reads.remove(&junction_coords) {
-                            for (buffered_cb, _buffered_pos, buffered_strand) in buffered {
+                        if let Some(buffered) = buffered_reads.remove(&jkey) {
+                            for (buffered_cb, _buffered_pos, buffered_strand, buffered_hash) in buffered {
+                                // Use the buffered read's own JunctionKey with its strand
+                                let buffered_key = JunctionKey {
+                                    tid: tid as u32,
+                                    start,
+                                    end,
+                                    strand: buffered_strand,
+                                };
+                                junction_strands.entry(buffered_key).or_insert(buffered_strand);
                                 junction::process_junction(
-                                    &junction_coords,
+                                    buffered_key,
                                     buffered_cb.as_ref(),
-                                    buffered_strand,
                                     &mut junction_counts,
                                     &mut junction_totals,
-                                    &mut junction_strands,
                                     &mut processed_reads,
-                                    read_name,
-                                    &config.mode,
+                                    buffered_hash,
+                                    config.mode,
                                 );
                             }
                         }
                     }
 
                     // Process or buffer the current read
-                    if supported_junctions.contains(&junction_coords) {
+                    if supported_junctions.contains(&jkey) {
                         junction::process_junction(
-                            &junction_coords,
+                            jkey,
                             cell_barcode.as_ref(),
-                            strand,
                             &mut junction_counts,
                             &mut junction_totals,
-                            &mut junction_strands,
                             &mut processed_reads,
-                            read_name,
-                            &config.mode,
+                            read_name_hash,
+                            config.mode,
                         );
                     } else {
                         buffered_reads
-                            .entry(junction_coords.clone())
+                            .entry(jkey)
                             .or_default()
-                            .push((cell_barcode.clone(), current_pos, strand));
+                            .push((cell_barcode.clone(), current_pos, strand, read_name_hash));
                     }
                     current_pos += intron_length;
                 } else if let Cigar::SoftClip(_) = cigars[i] {
@@ -320,7 +348,7 @@ pub fn process_bam_records(
             if let Some(bi) = boundary_index {
                 let segments = extract_aligned_segments(&record);
                 boundary::count_boundaries(
-                    &ref_name,
+                    ref_name,
                     &segments,
                     bi,
                     cell_barcode.as_ref(),
@@ -330,17 +358,33 @@ pub fn process_bam_records(
                     &mut boundary_types,
                     &mut boundary_strands,
                     &mut processed_boundary_reads,
-                    read_name,
-                    &config.mode,
+                    read_name_hash,
+                    config.mode,
                 );
             }
         }
     }
 
+    // Convert JunctionKey-keyed maps to String-keyed maps for output compatibility
+    let junction_totals_out: HashMap<String, u32> = junction_totals
+        .into_iter()
+        .map(|(k, v)| (k.to_string_key(&reference_names), v))
+        .collect();
+
+    let junction_strands_out: HashMap<String, Strand> = junction_strands
+        .into_iter()
+        .map(|(k, v)| (k.to_string_key(&reference_names), v))
+        .collect();
+
+    let junction_counts_out: HashMap<String, HashMap<String, u32>> = junction_counts
+        .into_iter()
+        .map(|(k, v)| (k.to_string_key(&reference_names), v))
+        .collect();
+
     Ok(ProcessingResult {
-        junction_counts,
-        junction_totals,
-        junction_strands,
+        junction_counts: junction_counts_out,
+        junction_totals: junction_totals_out,
+        junction_strands: junction_strands_out,
         cell_barcodes,
         boundary_counts,
         boundary_totals,
@@ -778,7 +822,7 @@ mod tests {
 
         // Configure: bulk mode, min_anchor=8, min_intron=70, max_intron=500000
         let config = crate::types::RunConfig {
-            mode: "bulk".to_string(),
+            mode: crate::types::Mode::Bulk,
             bam_file: bam_str.to_string(),
             output_prefix: tmpdir.path().join("out").to_str().unwrap().to_string(),
             min_anchor_length: 8,
@@ -801,9 +845,9 @@ mod tests {
         // Junction keys include strand suffix ":." for Unstranded mode
         assert!(result.junction_totals.contains_key("chr1:5011-5110:."),
             "Expected junction chr1:5011-5110:., got: {:?}", result.junction_totals.keys().collect::<Vec<_>>());
-        // Junction count: flush reuses the current read's name for dedup,
-        // so buffered + current read counts as 1 (dedup by read_name)
-        assert_eq!(*result.junction_totals.get("chr1:5011-5110:.").unwrap(), 1);
+        // Both bad_anchor (buffered then flushed) and good_anchor are counted.
+        // Each has a distinct read_name_hash, so dedup allows both.
+        assert_eq!(*result.junction_totals.get("chr1:5011-5110:.").unwrap(), 2);
 
         // refskip_left produces junction at chr1:511-610 and chr1:614-813
         // refskip_right produces: pos=800, Match(10)→810, RefSkip(200): junction at chr1:811-1010
@@ -855,7 +899,7 @@ mod tests {
         barcodes_of_interest.insert("KNOWN-1".to_string());
 
         let config = crate::types::RunConfig {
-            mode: "single".to_string(),
+            mode: crate::types::Mode::Single,
             bam_file: bam_str.to_string(),
             output_prefix: tmpdir.path().join("out").to_str().unwrap().to_string(),
             min_anchor_length: 8,
