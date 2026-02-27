@@ -73,6 +73,7 @@ fn bulk_config(strand: tosa::types::StrandMode, gtf: Option<String>) -> tosa::ty
         strand_mode: strand,
         gtf_file: gtf,
         verbose: false,
+        threads: 1,
     }
 }
 
@@ -81,7 +82,7 @@ fn bulk_config(strand: tosa::types::StrandMode, gtf: Option<String>) -> tosa::ty
 // ===========================================================================
 #[test]
 fn test_count_total_reads() {
-    let total = tosa::bam_reader::count_total_reads(&test_bam_path()).unwrap();
+    let total = tosa::bam_reader::count_total_reads(&test_bam_path(), 1).unwrap();
     assert_eq!(total, 26, "Synthetic BAM has exactly 26 records");
 }
 
@@ -253,6 +254,7 @@ fn single_config(
         strand_mode: strand,
         gtf_file: gtf,
         verbose: false,
+        threads: 1,
     }
 }
 
@@ -592,6 +594,7 @@ fn test_run_bulk_mode() {
         strand_mode: tosa::types::StrandMode::Unstranded,
         gtf_file: Some(test_gtf_path()),
         verbose: false,
+        threads: 1,
     };
 
     tosa::run(&config).unwrap();
@@ -625,6 +628,7 @@ fn test_run_bulk_no_gtf() {
         strand_mode: tosa::types::StrandMode::Unstranded,
         gtf_file: None,
         verbose: false,
+        threads: 1,
     };
 
     tosa::run(&config).unwrap();
@@ -657,6 +661,7 @@ fn test_run_single_mode() {
         strand_mode: tosa::types::StrandMode::Unstranded,
         gtf_file: Some(test_gtf_path()),
         verbose: false,
+        threads: 1,
     };
 
     tosa::run(&config).unwrap();
@@ -692,6 +697,7 @@ fn test_run_single_no_barcode_file() {
         strand_mode: tosa::types::StrandMode::Unstranded,
         gtf_file: None,
         verbose: false,
+        threads: 1,
     };
 
     tosa::run(&config).unwrap();

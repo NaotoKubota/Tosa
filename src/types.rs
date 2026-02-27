@@ -149,6 +149,8 @@ pub struct RunConfig {
     pub gtf_file: Option<String>,
     /// Enable verbose (debug) logging.
     pub verbose: bool,
+    /// Number of threads for parallel processing.
+    pub threads: usize,
 }
 
 #[cfg(test)]

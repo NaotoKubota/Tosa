@@ -38,6 +38,7 @@ pub fn run(config: &RunConfig) -> Result<(), Box<dyn std::error::Error>> {
     info!("Maximum intron length: {}", config.max_intron_length);
     info!("Maximum loci (NH): {}", config.max_loci);
     info!("Strand mode: {}", config.strand_mode);
+    info!("Threads: {}", config.threads);
 
     // Load cell barcodes of interest (single mode only)
     let cell_barcodes_of_interest = if config.mode == Mode::Single {
@@ -68,7 +69,7 @@ pub fn run(config: &RunConfig) -> Result<(), Box<dyn std::error::Error>> {
         config,
         &cell_barcodes_of_interest,
         boundary_index.as_ref(),
-    )?;
+    ).map_err(|e| -> Box<dyn std::error::Error> { e })?;
 
     // Write output files
     info!("Writing output files");
@@ -154,6 +155,7 @@ mod tests {
             strand_mode: types::StrandMode::Unstranded,
             gtf_file: Some(test_gtf_path()),
             verbose: false,
+            threads: 1,
         };
 
         run(&config).unwrap();
@@ -181,6 +183,7 @@ mod tests {
             strand_mode: types::StrandMode::Unstranded,
             gtf_file: Some(test_gtf_path()),
             verbose: false,
+            threads: 1,
         };
 
         run(&config).unwrap();

@@ -4,7 +4,9 @@ use rust_htslib::bam::{self, Read};
 use rust_htslib::bam::IndexedReader;
 use rust_htslib::bam::record::{Aux, Cigar};
 use std::collections::{HashMap, HashSet};
+use std::sync::atomic::{AtomicU64, Ordering};
 use log::{info, debug};
+use rayon::prelude::*;
 
 use crate::types::{RunConfig, StrandMode, Strand, Mode, JunctionKey, hash_read_name};
 use crate::junction;
@@ -31,8 +33,11 @@ pub struct ProcessingResult {
 }
 
 /// Count total mapped reads using the BAM index.
-pub fn count_total_reads(bam_file: &str) -> Result<u64, Box<dyn std::error::Error>> {
+pub fn count_total_reads(bam_file: &str, threads: usize) -> Result<u64, Box<dyn std::error::Error + Send + Sync>> {
     let mut bam_index_reader = IndexedReader::from_path(bam_file)?;
+    if threads > 1 {
+        bam_index_reader.set_threads(threads - 1)?;
+    }
     let stats = bam_index_reader.index_stats()?;
     debug!("stats: {:?}", stats);
     let total_mapped_reads: u64 = stats.iter().map(|(_, _, mapped, _)| mapped).sum();
@@ -109,64 +114,70 @@ pub fn extract_aligned_segments(record: &bam::Record) -> Vec<(i64, i64)> {
     segments
 }
 
-/// Process all records in a BAM file, extracting junction and boundary counts.
-pub fn process_bam_records(
+/// Per-chromosome processing result (used internally for merging).
+struct ChromResult {
+    junction_counts: HashMap<JunctionKey, HashMap<String, u32>>,
+    junction_totals: HashMap<JunctionKey, u32>,
+    junction_strands: HashMap<JunctionKey, Strand>,
+    junction_has_left_anchor: HashMap<JunctionKey, bool>,
+    junction_has_right_anchor: HashMap<JunctionKey, bool>,
+    cell_barcodes: HashSet<String>,
+    boundary_counts: HashMap<String, HashMap<String, u32>>,
+    boundary_totals: HashMap<String, u32>,
+    boundary_types: HashMap<String, crate::types::BoundaryType>,
+    boundary_strands: HashMap<String, Strand>,
+}
+
+/// Process one chromosome's records from an IndexedReader.
+fn process_chromosome(
+    bam_file: &str,
+    tid: u32,
+    chrom: &str,
     config: &RunConfig,
     cell_barcodes_of_interest: &HashSet<String>,
     boundary_index: Option<&BoundaryIndex>,
-) -> Result<ProcessingResult, Box<dyn std::error::Error>> {
-    let total_mapped_reads = count_total_reads(&config.bam_file)?;
-    info!("Total number of reads: {}", total_mapped_reads);
+    reference_names: &[String],
+    progress_counter: &AtomicU64,
+    total_mapped_reads: u64,
+) -> Result<ChromResult, Box<dyn std::error::Error + Send + Sync>> {
+    let mut reader = IndexedReader::from_path(bam_file)?;
+    // Each thread has its own reader; no need for per-reader htslib IO threads
+    reader.fetch(rust_htslib::bam::FetchDefinition::RegionString(
+        chrom.as_bytes(),
+        0,
+        i64::MAX,
+    ))?;
 
-    let mut bam_reader = bam::Reader::from_path(&config.bam_file)?;
-
-    // Get reference names (chromosome names)
-    let header = bam_reader.header().to_owned();
-    let reference_names: Vec<String> = header
-        .target_names()
-        .iter()
-        .map(|name| String::from_utf8_lossy(name).to_string())
-        .collect();
-
-    // Junction state — keyed by compact JunctionKey (zero heap per key)
     let mut junction_counts: HashMap<JunctionKey, HashMap<String, u32>> = HashMap::new();
     let mut junction_totals: HashMap<JunctionKey, u32> = HashMap::new();
     let mut junction_strands: HashMap<JunctionKey, Strand> = HashMap::new();
-    let mut cell_barcodes: HashSet<String> = HashSet::new();
-    // Per-junction anchor tracking (regtools-style): a junction is reported
-    // when *any* read provides a left anchor >= threshold AND *any* read
-    // (possibly a different one) provides a right anchor >= threshold.
     let mut junction_has_left_anchor: HashMap<JunctionKey, bool> = HashMap::new();
     let mut junction_has_right_anchor: HashMap<JunctionKey, bool> = HashMap::new();
-    // Dedup via u64 hash of read names instead of full String storage.
     let mut processed_reads: HashMap<JunctionKey, HashSet<u64>> = HashMap::new();
+    let mut cell_barcodes: HashSet<String> = HashSet::new();
 
-    // Boundary state
     let mut boundary_counts: HashMap<String, HashMap<String, u32>> = HashMap::new();
     let mut boundary_totals: HashMap<String, u32> = HashMap::new();
     let mut boundary_types: HashMap<String, crate::types::BoundaryType> = HashMap::new();
     let mut boundary_strands: HashMap<String, Strand> = HashMap::new();
     let mut processed_boundary_reads: HashMap<String, HashSet<u64>> = HashMap::new();
 
-    // Progress tracking
-    let mut read_count: u64 = 0;
-    let mut last_percentage: u64 = 0;
-
-    // Chromosome-change eviction: clear dedup data when moving to a new chromosome.
-    let mut last_tid: i32 = -1;
-
+    let mut local_read_count: u64 = 0;
     let is_single = config.mode == Mode::Single;
 
-    for result in bam_reader.records() {
+    for result in reader.records() {
         let record = result?;
-        read_count += 1;
+        local_read_count += 1;
 
-        // Progress logging
-        if total_mapped_reads > 0 {
-            let progress_percentage = (read_count * 100) / total_mapped_reads;
-            if progress_percentage > last_percentage {
-                info!("Progress: {}% ({} / {})", progress_percentage, read_count, total_mapped_reads);
-                last_percentage = progress_percentage;
+        // Progress logging (atomic counter shared across threads)
+        if total_mapped_reads > 0 && local_read_count % 10000 == 0 {
+            let global_count = progress_counter.fetch_add(10000, Ordering::Relaxed) + 10000;
+            let progress_percentage = (global_count * 100) / total_mapped_reads;
+            if progress_percentage <= 100 {
+                info!(
+                    "Progress: {}% ({} / {})",
+                    progress_percentage, global_count, total_mapped_reads
+                );
             }
         }
 
@@ -182,23 +193,13 @@ pub fn process_bam_records(
         }
 
         // Extract reference name (chromosome) and start position
-        let tid = record.tid();
-        if tid < 0 {
+        let rec_tid = record.tid();
+        if rec_tid < 0 {
             continue; // Unmapped read
         }
 
-        // Chromosome-change eviction: when we move to a new chromosome in a
-        // coordinate-sorted BAM, all previous-chromosome data is no longer needed.
-        // Note: junction_has_left/right_anchor must NOT be cleared here because
-        // they are used at output time (after all chromosomes are processed).
-        if tid as i32 != last_tid {
-            processed_reads.clear();
-            processed_boundary_reads.clear();
-            last_tid = tid as i32;
-        }
-
         // Borrow reference name — no per-read heap allocation
-        let ref_name = &reference_names[tid as usize];
+        let ref_name = &reference_names[rec_tid as usize];
         let mut current_pos = record.pos();
 
         // Extract Cell Barcode (CB) from tags if in single mode
@@ -237,14 +238,14 @@ pub fn process_bam_records(
             for i in 0..cigars.len() {
                 if let Cigar::RefSkip(len) = cigars[i] {
                     let intron_length = *len as i64;
-                    if intron_length < config.min_intron_length || intron_length > config.max_intron_length {
+                    if intron_length < config.min_intron_length
+                        || intron_length > config.max_intron_length
+                    {
                         current_pos += intron_length;
                         continue;
                     }
 
                     // Calculate left anchor length
-                    // Note: Cigar::Diff (X = sequence mismatch) breaks the anchor,
-                    // consistent with regtools which does not allow mismatches in anchors.
                     let mut left_anchor_length: i64 = 0;
                     let mut j = i;
                     while j > 0 {
@@ -273,7 +274,10 @@ pub fn process_bam_records(
                                     break;
                                 }
                             }
-                            Cigar::RefSkip(_) => { k += 1; continue; }
+                            Cigar::RefSkip(_) => {
+                                k += 1;
+                                continue;
+                            }
                             _ => break,
                         }
                         k += 1;
@@ -281,10 +285,10 @@ pub fn process_bam_records(
                     let has_right_anchor = right_anchor_length >= config.min_anchor_length;
 
                     // Use 1-based inclusive coordinates for junction IDs
-                    let start = current_pos + 1;          // 1-based intron start
+                    let start = current_pos + 1; // 1-based intron start
                     let end = current_pos + intron_length; // 1-based intron end
                     let jkey = JunctionKey {
-                        tid: tid as u32,
+                        tid: tid,
                         start,
                         end,
                         strand,
@@ -293,9 +297,11 @@ pub fn process_bam_records(
                     // Per-junction anchor tracking (regtools-style):
                     // OR-accumulate left/right anchor flags across all reads.
                     {
-                        let left_flag = junction_has_left_anchor.entry(jkey).or_insert(false);
+                        let left_flag =
+                            junction_has_left_anchor.entry(jkey).or_insert(false);
                         *left_flag = *left_flag || has_left_anchor;
-                        let right_flag = junction_has_right_anchor.entry(jkey).or_insert(false);
+                        let right_flag =
+                            junction_has_right_anchor.entry(jkey).or_insert(false);
                         *right_flag = *right_flag || has_right_anchor;
                     }
 
@@ -343,6 +349,121 @@ pub fn process_bam_records(
             }
         }
     }
+
+    // Account for remaining reads not yet reported to progress counter
+    let remainder = local_read_count % 10000;
+    if remainder > 0 {
+        progress_counter.fetch_add(remainder, Ordering::Relaxed);
+    }
+
+    Ok(ChromResult {
+        junction_counts,
+        junction_totals,
+        junction_strands,
+        junction_has_left_anchor,
+        junction_has_right_anchor,
+        cell_barcodes,
+        boundary_counts,
+        boundary_totals,
+        boundary_types,
+        boundary_strands,
+    })
+}
+
+/// Process all records in a BAM file, extracting junction and boundary counts.
+///
+/// When `config.threads > 1`, processing is parallelized per-chromosome using rayon.
+pub fn process_bam_records(
+    config: &RunConfig,
+    cell_barcodes_of_interest: &HashSet<String>,
+    boundary_index: Option<&BoundaryIndex>,
+) -> Result<ProcessingResult, Box<dyn std::error::Error + Send + Sync>> {
+    let total_mapped_reads = count_total_reads(&config.bam_file, config.threads)?;
+    info!("Total number of reads: {}", total_mapped_reads);
+
+    // Get reference names (chromosome names) from BAM header
+    let bam_reader = bam::Reader::from_path(&config.bam_file)?;
+    let header = bam_reader.header().to_owned();
+    let reference_names: Vec<String> = header
+        .target_names()
+        .iter()
+        .map(|name| String::from_utf8_lossy(name).to_string())
+        .collect();
+    drop(bam_reader);
+
+    // Build list of (tid, chrom_name) for all chromosomes
+    let chroms: Vec<(u32, String)> = reference_names
+        .iter()
+        .enumerate()
+        .map(|(i, name)| (i as u32, name.clone()))
+        .collect();
+
+    // Shared atomic progress counter
+    let progress_counter = AtomicU64::new(0);
+
+    // Process chromosomes in parallel using rayon
+    let pool = rayon::ThreadPoolBuilder::new()
+        .num_threads(config.threads)
+        .build()?;
+
+    let chrom_results: Vec<Result<ChromResult, Box<dyn std::error::Error + Send + Sync>>> =
+        pool.install(|| {
+            chroms
+                .par_iter()
+                .map(|(tid, chrom)| {
+                    process_chromosome(
+                        &config.bam_file,
+                        *tid,
+                        chrom,
+                        config,
+                        cell_barcodes_of_interest,
+                        boundary_index,
+                        &reference_names,
+                        &progress_counter,
+                        total_mapped_reads,
+                    )
+                })
+                .collect()
+        });
+
+    // Merge per-chromosome results
+    let mut junction_counts: HashMap<JunctionKey, HashMap<String, u32>> = HashMap::new();
+    let mut junction_totals: HashMap<JunctionKey, u32> = HashMap::new();
+    let mut junction_strands: HashMap<JunctionKey, Strand> = HashMap::new();
+    let mut junction_has_left_anchor: HashMap<JunctionKey, bool> = HashMap::new();
+    let mut junction_has_right_anchor: HashMap<JunctionKey, bool> = HashMap::new();
+    let mut cell_barcodes: HashSet<String> = HashSet::new();
+    let mut boundary_counts: HashMap<String, HashMap<String, u32>> = HashMap::new();
+    let mut boundary_totals: HashMap<String, u32> = HashMap::new();
+    let mut boundary_types: HashMap<String, crate::types::BoundaryType> = HashMap::new();
+    let mut boundary_strands: HashMap<String, Strand> = HashMap::new();
+
+    for chrom_result in chrom_results {
+        let cr = chrom_result?;
+
+        // Merge junction data — keys are unique per chromosome so extend() is safe
+        junction_counts.extend(cr.junction_counts);
+        junction_totals.extend(cr.junction_totals);
+        junction_strands.extend(cr.junction_strands);
+
+        // Merge anchor flags with OR logic
+        for (k, v) in cr.junction_has_left_anchor {
+            let flag = junction_has_left_anchor.entry(k).or_insert(false);
+            *flag = *flag || v;
+        }
+        for (k, v) in cr.junction_has_right_anchor {
+            let flag = junction_has_right_anchor.entry(k).or_insert(false);
+            *flag = *flag || v;
+        }
+
+        cell_barcodes.extend(cr.cell_barcodes);
+        boundary_counts.extend(cr.boundary_counts);
+        boundary_totals.extend(cr.boundary_totals);
+        boundary_types.extend(cr.boundary_types);
+        boundary_strands.extend(cr.boundary_strands);
+    }
+
+    info!("Progress: 100% ({} / {})", total_mapped_reads, total_mapped_reads);
 
     // Filter junctions: only emit those where at least one read provided a
     // sufficient left anchor AND at least one read provided a sufficient right
@@ -825,6 +946,7 @@ mod tests {
             strand_mode: StrandMode::Unstranded,
             gtf_file: None,
             verbose: false,
+            threads: 1,
         };
 
         let result = process_bam_records(
@@ -889,6 +1011,7 @@ mod tests {
             strand_mode: StrandMode::Unstranded,
             gtf_file: None,
             verbose: false,
+            threads: 1,
         };
 
         let result = process_bam_records(
@@ -958,6 +1081,7 @@ mod tests {
             strand_mode: StrandMode::Unstranded,
             gtf_file: None,
             verbose: false,
+            threads: 1,
         };
 
         let result = process_bam_records(
@@ -1029,6 +1153,7 @@ mod tests {
             strand_mode: StrandMode::Unstranded,
             gtf_file: None,
             verbose: false,
+            threads: 1,
         };
 
         let result = process_bam_records(

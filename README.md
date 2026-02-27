@@ -50,6 +50,8 @@ Options:
           XS (use XS tags). Omit for unstranded [possible values: RF, FR, XS]
   -g, --gtf <gtf_file>
           GTF annotation file for exon-intron boundary read counting
+  -p, --threads <threads>
+          Number of threads for parallel processing [default: 1]
   -v, --verbose
           Enable verbose output to print all arguments
   -h, --help

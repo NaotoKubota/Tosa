@@ -63,6 +63,12 @@ pub fn build_cli() -> Command {
             .long("verbose")
             .action(clap::ArgAction::SetTrue)
             .help("Enable verbose output to print all arguments"))
+        .arg(Arg::new("threads")
+            .short('p')
+            .long("threads")
+            .default_value("1")
+            .value_parser(clap::value_parser!(usize))
+            .help("Number of threads for parallel processing"))
 }
 
 /// Parse CLI matches into a RunConfig.
@@ -82,6 +88,7 @@ pub fn parse_config(matches: &clap::ArgMatches) -> RunConfig {
         strand_mode: StrandMode::from_str_opt(matches.get_one::<String>("strand")),
         gtf_file: matches.get_one::<String>("gtf_file").cloned(),
         verbose: matches.get_flag("verbose"),
+        threads: *matches.get_one::<usize>("threads").unwrap(),
     }
 }
 
@@ -107,6 +114,7 @@ mod tests {
         assert_eq!(config.strand_mode, StrandMode::Unstranded);
         assert_eq!(config.gtf_file, None);
         assert!(!config.verbose);
+        assert_eq!(config.threads, 1);
     }
 
     #[test]
@@ -121,6 +129,7 @@ mod tests {
             "-s", "RF",
             "-g", "annotation.gtf",
             "-v",
+            "-p", "8",
             "single", "input.bam", "output",
         ]);
         let config = parse_config(&matches);
@@ -136,6 +145,7 @@ mod tests {
         assert_eq!(config.strand_mode, StrandMode::RF);
         assert_eq!(config.gtf_file, Some("annotation.gtf".to_string()));
         assert!(config.verbose);
+        assert_eq!(config.threads, 8);
     }
 
     #[test]
