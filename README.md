@@ -12,12 +12,13 @@
 [![Docker Pulls](https://img.shields.io/docker/pulls/naotokubota/tosa)](https://hub.docker.com/r/naotokubota/tosa)
 [![Docker Image Size](https://img.shields.io/docker/image-size/naotokubota/tosa)](https://hub.docker.com/r/naotokubota/tosa)
 
-Fast junction and exon-intron boundary read counting from RNA-seq/scRNA-seq BAM files.
+Fast junction and exon-intron boundary read counting from RNA-seq/scRNA-seq BAM/CRAM files.
 
 ## Features
 
 - **Junction read counting** from spliced alignments (CIGAR `N` operations)
 - **Exon-intron boundary read counting** using GTF annotation (1-base boundary coordinates)
+- **BAM and CRAM** input support (CRAM files are read without a reference FASTA)
 - **Strand specificity** support: unstranded, XS tag, RF (first-strand), FR (second-strand)
 - **Bulk and single-cell** modes (10x Genomics-style cell barcodes)
 - Paired-end read deduplication (same junction/boundary counted once per read pair)
@@ -25,13 +26,13 @@ Fast junction and exon-intron boundary read counting from RNA-seq/scRNA-seq BAM 
 ## Usage
 
 ```
-Extract junction and boundary reads from RNA-seq/scRNA-seq BAM files
+Extract junction and boundary reads from RNA-seq/scRNA-seq BAM/CRAM files
 
 Usage: tosa [OPTIONS] <mode> <bam_file> <output_prefix>
 
 Arguments:
   <mode>           Mode of operation: 'bulk' or 'single' [possible values: bulk, single]
-  <bam_file>       Path to the BAM file
+  <bam_file>       Path to the BAM/CRAM file
   <output_prefix>  Output prefix for the output files
 
 Options:
@@ -104,6 +105,12 @@ tosa bulk -s RF -g annotation.gtf input.bam output_prefix
 
 # Count junction reads from single-cell RNA-seq BAM file
 tosa single -c barcodes.tsv input.bam output_prefix
+
+# Use a CRAM file instead of BAM (no reference FASTA needed)
+tosa bulk input.cram output_prefix
+
+# CRAM with GTF annotation and strand specificity
+tosa bulk -s RF -g annotation.gtf input.cram output_prefix
 ```
 
 ## Strand settings

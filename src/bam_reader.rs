@@ -1,8 +1,9 @@
-//! BAM file processing: read iteration, CIGAR parsing, junction extraction, and boundary counting.
+//! BAM/CRAM file processing: read iteration, CIGAR parsing, junction extraction, and boundary counting.
 
 use rust_htslib::bam::{self, Read};
 use rust_htslib::bam::IndexedReader;
 use rust_htslib::bam::record::{Aux, Cigar};
+use rust_htslib::htslib;
 use std::collections::{HashMap, HashSet};
 use std::sync::atomic::{AtomicU64, Ordering};
 use log::{info, debug};
@@ -32,7 +33,17 @@ pub struct ProcessingResult {
     pub boundary_strands: HashMap<String, Strand>,
 }
 
-/// Count total mapped reads using the BAM index.
+/// SAM fields Tosa needs from each record (everything except SEQ/QUAL).
+/// By declaring these, CRAM can be decoded without a reference FASTA.
+const TOSA_REQUIRED_FIELDS: u32 =
+    (htslib::sam_fields_SAM_QNAME
+    | htslib::sam_fields_SAM_FLAG
+    | htslib::sam_fields_SAM_RNAME
+    | htslib::sam_fields_SAM_POS
+    | htslib::sam_fields_SAM_CIGAR
+    | htslib::sam_fields_SAM_AUX) as u32;
+
+/// Count total mapped reads using the BAM/CRAM index.
 pub fn count_total_reads(bam_file: &str, threads: usize) -> Result<u64, Box<dyn std::error::Error + Send + Sync>> {
     let mut bam_index_reader = IndexedReader::from_path(bam_file)?;
     if threads > 1 {
@@ -141,6 +152,10 @@ fn process_chromosome(
     total_mapped_reads: u64,
 ) -> Result<ChromResult, Box<dyn std::error::Error + Send + Sync>> {
     let mut reader = IndexedReader::from_path(bam_file)?;
+    reader.set_cram_options(
+        htslib::hts_fmt_option_CRAM_OPT_REQUIRED_FIELDS,
+        TOSA_REQUIRED_FIELDS,
+    )?;
     // Each thread has its own reader; no need for per-reader htslib IO threads
     reader.fetch(rust_htslib::bam::FetchDefinition::RegionString(
         chrom.as_bytes(),
@@ -381,7 +396,7 @@ pub fn process_bam_records(
     let total_mapped_reads = count_total_reads(&config.bam_file, config.threads)?;
     info!("Total number of reads: {}", total_mapped_reads);
 
-    // Get reference names (chromosome names) from BAM header
+    // Get reference names (chromosome names) from BAM/CRAM header
     let bam_reader = bam::Reader::from_path(&config.bam_file)?;
     let header = bam_reader.header().to_owned();
     let reference_names: Vec<String> = header

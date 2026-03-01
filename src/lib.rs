@@ -1,8 +1,8 @@
 //! # Tosa
 //!
-//! Fast junction and exon-intron boundary read counting from RNA-seq/scRNA-seq BAM files.
+//! Fast junction and exon-intron boundary read counting from RNA-seq/scRNA-seq BAM/CRAM files.
 //!
-//! Tosa processes mapped BAM files to extract:
+//! Tosa processes mapped BAM/CRAM files to extract:
 //! - **Junction read counts**: Reads spanning splice junctions (identified by `N` CIGAR operations)
 //! - **Boundary read counts**: Reads overlapping exon-intron boundaries (when GTF annotation is provided)
 //!
@@ -31,7 +31,7 @@ pub fn run(config: &RunConfig) -> Result<(), Box<dyn std::error::Error>> {
     // Log configuration
     info!("Running tosa v{}", env!("CARGO_PKG_VERSION"));
     info!("Mode: {}", config.mode);
-    info!("BAM file: {}", config.bam_file);
+    info!("Input file: {}", config.bam_file);
     info!("Output prefix: {}", config.output_prefix);
     info!("Minimum anchor length: {}", config.min_anchor_length);
     info!("Minimum intron length: {}", config.min_intron_length);

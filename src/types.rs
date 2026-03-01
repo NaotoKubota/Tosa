@@ -129,7 +129,7 @@ impl fmt::Display for BoundaryType {
 pub struct RunConfig {
     /// Mode of operation: Bulk or Single.
     pub mode: Mode,
-    /// Path to the BAM file.
+    /// Path to the BAM/CRAM file.
     pub bam_file: String,
     /// Output prefix for output files.
     pub output_prefix: String,

@@ -1,12 +1,13 @@
-//! Generates a small synthetic BAM file for trying out Tosa.
+//! Generates a small synthetic BAM file (and optionally a CRAM file) for trying out Tosa.
 //!
 //! Usage:
 //!   cargo run --example generate_example_bam [output_dir]
 //!
-//! Creates `example.bam` and `example.bam.bai` in the specified directory
-//! (defaults to `examples/`).
+//! Creates the following files in the specified directory (defaults to `examples/`):
+//!   - `example.bam` and `example.bam.bai`
+//!   - `example.cram` and `example.cram.crai`
 //!
-//! The BAM contains reads mapped to chr1 with:
+//! The BAM/CRAM contains reads mapped to chr1 with:
 //! - 13 unique junction reads spanning intron 1 (chr1:1201-1499)
 //!   - 10 with XS:A:+ and 3 with XS:A:-
 //!   - 1 duplicate pair (same QNAME) for dedup testing
@@ -19,8 +20,9 @@
 //!
 //! Matching GTF annotation is in `examples/annotation.gtf`.
 
-use rust_htslib::bam::{self, record::Aux, record::Cigar, record::CigarString, Record, Writer};
+use rust_htslib::bam::{self, Read, record::Aux, record::Cigar, record::CigarString, Record, Writer};
 use rust_htslib::bam::header::{Header, HeaderRecord};
+use std::io::Write;
 
 fn main() {
     let out_dir = std::env::args().nth(1).unwrap_or_else(|| "examples".to_string());
@@ -136,4 +138,47 @@ fn main() {
     println!("  Junction 2: chr1:1701-1999 (5 reads, all +strand)");
     println!("  Boundary reads: 6 (2 per intron-end × 2 introns + 2 extra)");
     println!("  Multi-mapped (NH=2, filtered): 1");
+
+    // --- Generate a temporary reference FASTA for CRAM encoding ---
+    let tmp_dir = tempfile::tempdir().expect("Failed to create temp dir");
+    let ref_path = tmp_dir.path().join("reference.fa");
+    let ref_index_path = tmp_dir.path().join("reference.fa.fai");
+    {
+        let mut fa_file = std::fs::File::create(&ref_path).expect("Failed to create reference FASTA");
+        // chr1: 10000 bp of 'N' (same length as the SQ header)
+        writeln!(fa_file, ">chr1").unwrap();
+        let seq = "N".repeat(10000);
+        // Write in 80-char lines (standard FASTA)
+        for chunk in seq.as_bytes().chunks(80) {
+            fa_file.write_all(chunk).unwrap();
+            fa_file.write_all(b"\n").unwrap();
+        }
+    }
+    // Write a simple .fai index: name\tlength\toffset\tlinebases\tlinewidth
+    {
+        let mut fai_file = std::fs::File::create(&ref_index_path).expect("Failed to create .fai");
+        // offset=6 (">chr1\n" = 6 bytes), linebases=80, linewidth=81 (80 + newline)
+        writeln!(fai_file, "chr1\t10000\t6\t80\t81").unwrap();
+    }
+
+    // --- Generate CRAM from BAM ---
+    let cram_path = format!("{}/example.cram", out_dir);
+    {
+        let mut bam_reader = bam::Reader::from_path(&bam_path).expect("Failed to open BAM for CRAM conversion");
+        let header = bam::Header::from_template(bam_reader.header());
+        let mut cram_writer = Writer::from_path(&cram_path, &header, bam::Format::Cram)
+            .expect("Failed to create CRAM writer");
+        cram_writer.set_reference(ref_path.to_str().unwrap()).expect("Failed to set CRAM reference");
+
+        let mut record = Record::new();
+        while let Some(result) = bam_reader.read(&mut record) {
+            result.unwrap();
+            cram_writer.write(&record).expect("Failed to write CRAM record");
+        }
+    }
+
+    // Build CRAI index
+    bam::index::build(&cram_path, None, bam::index::Type::Csi(14), 1).unwrap();
+
+    println!("Created {cram_path} and {cram_path}.crai");
 }

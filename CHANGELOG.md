@@ -6,13 +6,14 @@ All notable changes to this Tosa project will be documented in this file.
 
 ### Added
 
+- Add CRAM file support (no reference FASTA required; uses `CRAM_OPT_REQUIRED_FIELDS` to skip SEQ/QUAL decoding).
 - Add `-p`/`--threads` option for multi-threaded parallel processing (per-chromosome parallelism with rayon).
 - Add `--strand` option for strand specificity: RF (first-strand), FR (second-strand), XS (use XS tags), or omit for unstranded.
 - Add `--gtf` option for exon-intron boundary read counting using GTF annotation.
 - Add boundary read counting with 1-base boundary coordinates at intron ends (5' and 3' splice sites).
 - Add Strand column to junction and boundary output files.
 - Add unit tests for junction counting, boundary counting, GTF parsing, and strand determination.
-- Add integration tests using test BAM file.
+- Add integration tests using test BAM and CRAM files.
 - Add version synchronization tests (version-sync).
 - Add `build.rs` for automatic VERSION file generation from Cargo.toml.
 
