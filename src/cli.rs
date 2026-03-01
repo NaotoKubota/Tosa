@@ -28,7 +28,7 @@ pub fn build_cli() -> Command {
         .arg(Arg::new("min_intron_length")
             .short('m')
             .long("min-intron-length")
-            .default_value("70")
+            .default_value("20")
             .value_parser(clap::value_parser!(i64))
             .help("Minimum intron length for junctions"))
         .arg(Arg::new("max_intron_length")
@@ -107,7 +107,7 @@ mod tests {
         assert_eq!(config.bam_file, "test.bam");
         assert_eq!(config.output_prefix, "out_prefix");
         assert_eq!(config.min_anchor_length, 8);
-        assert_eq!(config.min_intron_length, 70);
+        assert_eq!(config.min_intron_length, 20);
         assert_eq!(config.max_intron_length, 500000);
         assert_eq!(config.max_loci, 1);
         assert_eq!(config.cell_barcode_file, None);

@@ -38,7 +38,7 @@ Options:
   -a, --anchor-length <anchor_length>
           Minimum anchor length for both sides of junctions [default: 8]
   -m, --min-intron-length <min_intron_length>
-          Minimum intron length for junctions [default: 70]
+          Minimum intron length for junctions [default: 20]
   -M, --max-intron-length <max_intron_length>
           Maximum intron length for junctions [default: 500000]
   -l, --max-loci <max_loci>

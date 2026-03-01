@@ -933,13 +933,13 @@ mod tests {
 
         write_indexed_bam(bam_str, &records);
 
-        // Configure: bulk mode, min_anchor=8, min_intron=70, max_intron=500000
+        // Configure: bulk mode, min_anchor=8, min_intron=20, max_intron=500000
         let config = crate::types::RunConfig {
             mode: crate::types::Mode::Bulk,
             bam_file: bam_str.to_string(),
             output_prefix: tmpdir.path().join("out").to_str().unwrap().to_string(),
             min_anchor_length: 8,
-            min_intron_length: 70,
+            min_intron_length: 20,
             max_intron_length: 500000,
             max_loci: 1,
             cell_barcode_file: None,
@@ -1004,7 +1004,7 @@ mod tests {
             bam_file: bam_str.to_string(),
             output_prefix: tmpdir.path().join("out").to_str().unwrap().to_string(),
             min_anchor_length: 8,
-            min_intron_length: 70,
+            min_intron_length: 20,
             max_intron_length: 500000,
             max_loci: 1,
             cell_barcode_file: None,
@@ -1074,7 +1074,7 @@ mod tests {
             bam_file: bam_str.to_string(),
             output_prefix: tmpdir.path().join("out").to_str().unwrap().to_string(),
             min_anchor_length: 8,
-            min_intron_length: 70,
+            min_intron_length: 20,
             max_intron_length: 500000,
             max_loci: 1,
             cell_barcode_file: None,
@@ -1146,7 +1146,7 @@ mod tests {
             bam_file: bam_str.to_string(),
             output_prefix: tmpdir.path().join("out").to_str().unwrap().to_string(),
             min_anchor_length: 8,
-            min_intron_length: 70,
+            min_intron_length: 20,
             max_intron_length: 500000,
             max_loci: 1,
             cell_barcode_file: Some("dummy_path".to_string()),
