@@ -44,9 +44,9 @@ fn main() {
     //   Intron 2: 1701–1999 (0-based 1700..1999, len 299)
     //
     // Junction keys (1-based): chr1:1201-1499, chr1:1701-1999
-    // Boundaries (0-based pairs):
-    //   Intron 1 → 5': chr1:1200-1201  3': chr1:1498-1499
-    //   Intron 2 → 5': chr1:1700-1701  3': chr1:1998-1999
+    // Boundaries (0-based pairs, anchor_length=1):
+    //   Intron 1 → 5': chr1:1199-1201  3': chr1:1498-1500
+    //   Intron 2 → 5': chr1:1699-1701  3': chr1:1998-2000
 
     struct ReadSpec {
         qname: &'static str,

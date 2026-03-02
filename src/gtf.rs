@@ -20,7 +20,11 @@ struct ExonRecord {
     strand: Strand,
 }
 
-/// Parse a GTF file and build a BoundaryIndex with 1-base boundary coordinates.
+/// Parse a GTF file and build a BoundaryIndex.
+///
+/// The `boundary_anchor_length` parameter controls how many bases on each side
+/// of a splice site the boundary interval spans (default 1). A read's aligned
+/// segment must fully contain this interval to be counted as a boundary read.
 ///
 /// Algorithm:
 /// 1. Read all "exon" records from the GTF
@@ -29,7 +33,7 @@ struct ExonRecord {
 /// 4. Derive introns from gaps between adjacent exons
 /// 5. For each intron, create 5' and 3' boundary entries
 /// 6. Deduplicate boundaries across all transcripts
-pub fn parse_gtf(path: &str) -> Result<BoundaryIndex, Box<dyn std::error::Error>> {
+pub fn parse_gtf(path: &str, boundary_anchor_length: i64) -> Result<BoundaryIndex, Box<dyn std::error::Error>> {
     info!("Parsing GTF file: {}", path);
 
     let file = File::open(path)?;
@@ -105,7 +109,7 @@ pub fn parse_gtf(path: &str) -> Result<BoundaryIndex, Box<dyn std::error::Error>
             let chrom = &exons[i].chrom;
             let strand = exons[i].strand;
 
-            let (five_p, three_p) = intron_to_boundaries(chrom, intron_start, intron_end, strand);
+            let (five_p, three_p) = intron_to_boundaries(chrom, intron_start, intron_end, strand, boundary_anchor_length);
 
             // Deduplicate: same boundary can arise from multiple transcripts
             if seen_boundaries.insert(five_p.boundary_id.clone()) {
@@ -169,33 +173,33 @@ chr1\tensembl\texon\t3001\t3500\t.\t+\t.\tgene_id \"GENE1\"; transcript_id \"TX1
         let mut tmpfile = NamedTempFile::new().unwrap();
         write!(tmpfile, "{}", gtf_content).unwrap();
 
-        let boundary_index = parse_gtf(tmpfile.path().to_str().unwrap()).unwrap();
+        let boundary_index = parse_gtf(tmpfile.path().to_str().unwrap(), 1).unwrap();
 
         // Exon 1: [1000, 1200), Exon 2: [2000, 2200), Exon 3: [3000, 3500)
-        // Intron 1: 1200-2000 → 5' boundary: 1200-1201, 3' boundary: 1999-2000
-        // Intron 2: 2200-3000 → 5' boundary: 2200-2201, 3' boundary: 2999-3000
+        // Intron 1: 1200-2000 → 5' boundary: 1199-1201, 3' boundary: 1999-2001
+        // Intron 2: 2200-3000 → 5' boundary: 2199-2201, 3' boundary: 2999-3001
 
         // Check 5' boundary of intron 1
         let overlapping = boundary_index.find_overlapping("chr1", 1100, 1300);
         assert_eq!(overlapping.len(), 1);
-        assert_eq!(overlapping[0].boundary_id, "chr1:1200-1201");
+        assert_eq!(overlapping[0].boundary_id, "chr1:1199-1201");
         assert_eq!(overlapping[0].boundary_type, BoundaryType::FivePrime);
 
         // Check 3' boundary of intron 1
         let overlapping = boundary_index.find_overlapping("chr1", 1990, 2010);
         assert_eq!(overlapping.len(), 1);
-        assert_eq!(overlapping[0].boundary_id, "chr1:1999-2000");
+        assert_eq!(overlapping[0].boundary_id, "chr1:1999-2001");
         assert_eq!(overlapping[0].boundary_type, BoundaryType::ThreePrime);
 
         // Check 5' boundary of intron 2
         let overlapping = boundary_index.find_overlapping("chr1", 2100, 2300);
         assert_eq!(overlapping.len(), 1);
-        assert_eq!(overlapping[0].boundary_id, "chr1:2200-2201");
+        assert_eq!(overlapping[0].boundary_id, "chr1:2199-2201");
 
         // Check 3' boundary of intron 2
         let overlapping = boundary_index.find_overlapping("chr1", 2990, 3010);
         assert_eq!(overlapping.len(), 1);
-        assert_eq!(overlapping[0].boundary_id, "chr1:2999-3000");
+        assert_eq!(overlapping[0].boundary_id, "chr1:2999-3001");
     }
 
     #[test]
@@ -210,7 +214,7 @@ chr1\tensembl\texon\t2001\t2500\t.\t+\t.\tgene_id \"G1\"; transcript_id \"TX2\";
         let mut tmpfile = NamedTempFile::new().unwrap();
         write!(tmpfile, "{}", gtf_content).unwrap();
 
-        let boundary_index = parse_gtf(tmpfile.path().to_str().unwrap()).unwrap();
+        let boundary_index = parse_gtf(tmpfile.path().to_str().unwrap(), 1).unwrap();
 
         // Both transcripts have intron 1200-2000, boundaries should be deduplicated
         let overlapping = boundary_index.find_overlapping("chr1", 1100, 1300);
@@ -228,7 +232,7 @@ chr1\tensembl\texon\t2001\t2200\t.\t+\t.\tgene_id \"G1\"; transcript_id \"TX1\";
         let mut tmpfile = NamedTempFile::new().unwrap();
         write!(tmpfile, "{}", gtf_content).unwrap();
 
-        let boundary_index = parse_gtf(tmpfile.path().to_str().unwrap()).unwrap();
+        let boundary_index = parse_gtf(tmpfile.path().to_str().unwrap(), 1).unwrap();
         let overlapping = boundary_index.find_overlapping("chr1", 1100, 1300);
         assert_eq!(overlapping.len(), 1);
     }
@@ -244,7 +248,7 @@ chr1\tensembl\texon\t2001\t2200\t.\t+\t.\tgene_id \"G1\"; transcript_id \"TX1\";
         let mut tmpfile = NamedTempFile::new().unwrap();
         write!(tmpfile, "{}", gtf_content).unwrap();
 
-        let boundary_index = parse_gtf(tmpfile.path().to_str().unwrap()).unwrap();
+        let boundary_index = parse_gtf(tmpfile.path().to_str().unwrap(), 1).unwrap();
         let overlapping = boundary_index.find_overlapping("chr1", 1100, 1300);
         assert_eq!(overlapping.len(), 1);
     }
@@ -259,8 +263,8 @@ chr1\tensembl\texon\t2001\t2200\t.\t.\t.\tgene_id \"G1\"; transcript_id \"TX1\";
         let mut tmpfile = NamedTempFile::new().unwrap();
         write!(tmpfile, "{}", gtf_content).unwrap();
 
-        let boundary_index = parse_gtf(tmpfile.path().to_str().unwrap()).unwrap();
-        let overlapping = boundary_index.find_overlapping("chr1", 1100, 1300);
+        let boundary_index = parse_gtf(tmpfile.path().to_str().unwrap(), 1).unwrap();
+        let overlapping = boundary_index.find_overlapping("chr1", 1098, 1302);
         assert_eq!(overlapping.len(), 1);
         // Verify the boundary has Unknown strand
         assert_eq!(overlapping[0].strand, Strand::Unknown);
@@ -276,8 +280,7 @@ chr1\tensembl\texon\t1200\t1400\t.\t+\t.\tgene_id \"G1\"; transcript_id \"TX1\";
         let mut tmpfile = NamedTempFile::new().unwrap();
         write!(tmpfile, "{}", gtf_content).unwrap();
 
-        let boundary_index = parse_gtf(tmpfile.path().to_str().unwrap()).unwrap();
-        // No intron gap between the two exons, so no boundaries
+        let boundary_index = parse_gtf(tmpfile.path().to_str().unwrap(), 1).unwrap();
         assert!(
             !boundary_index.boundaries.contains_key("chr1") ||
             boundary_index.find_overlapping("chr1", 0, 10000).is_empty()
@@ -293,10 +296,11 @@ chr1\tensembl\texon\t1001\t1200\t.\t+\t.\tgene_id \"G1\"; transcript_id \"TX1\";
         let mut tmpfile = NamedTempFile::new().unwrap();
         write!(tmpfile, "{}", gtf_content).unwrap();
 
-        let boundary_index = parse_gtf(tmpfile.path().to_str().unwrap()).unwrap();
+        let boundary_index = parse_gtf(tmpfile.path().to_str().unwrap(), 1).unwrap();
         assert!(
             !boundary_index.boundaries.contains_key("chr1") ||
             boundary_index.find_overlapping("chr1", 0, 10000).is_empty()
         );
     }
 }
+

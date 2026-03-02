@@ -135,6 +135,8 @@ pub struct RunConfig {
     pub output_prefix: String,
     /// Minimum anchor length for both sides of junctions.
     pub min_anchor_length: i64,
+    /// Minimum anchor length on each side of exon-intron boundaries.
+    pub min_boundary_anchor_length: i64,
     /// Minimum intron length for junctions.
     pub min_intron_length: i64,
     /// Maximum intron length for junctions.

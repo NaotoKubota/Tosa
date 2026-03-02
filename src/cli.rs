@@ -25,6 +25,12 @@ pub fn build_cli() -> Command {
             .default_value("8")
             .value_parser(clap::value_parser!(i64))
             .help("Minimum anchor length for both sides of junctions"))
+        .arg(Arg::new("boundary_anchor_length")
+            .short('b')
+            .long("boundary-anchor-length")
+            .default_value("1")
+            .value_parser(clap::value_parser!(i64))
+            .help("Minimum anchor length on each side of exon-intron boundaries"))
         .arg(Arg::new("min_intron_length")
             .short('m')
             .long("min-intron-length")
@@ -81,6 +87,7 @@ pub fn parse_config(matches: &clap::ArgMatches) -> RunConfig {
         bam_file: matches.get_one::<String>("bam_file").unwrap().clone(),
         output_prefix: matches.get_one::<String>("output_prefix").unwrap().clone(),
         min_anchor_length: *matches.get_one::<i64>("anchor_length").unwrap(),
+        min_boundary_anchor_length: *matches.get_one::<i64>("boundary_anchor_length").unwrap(),
         min_intron_length: *matches.get_one::<i64>("min_intron_length").unwrap(),
         max_intron_length: *matches.get_one::<i64>("max_intron_length").unwrap(),
         max_loci: *matches.get_one::<u32>("max_loci").unwrap(),
@@ -107,6 +114,7 @@ mod tests {
         assert_eq!(config.bam_file, "test.bam");
         assert_eq!(config.output_prefix, "out_prefix");
         assert_eq!(config.min_anchor_length, 8);
+        assert_eq!(config.min_boundary_anchor_length, 1);
         assert_eq!(config.min_intron_length, 20);
         assert_eq!(config.max_intron_length, 500000);
         assert_eq!(config.max_loci, 1);
@@ -122,6 +130,7 @@ mod tests {
         let matches = build_cli().get_matches_from([
             "tosa",
             "-a", "10",
+            "-b", "3",
             "-m", "50",
             "-M", "1000000",
             "-l", "3",
@@ -138,6 +147,7 @@ mod tests {
         assert_eq!(config.bam_file, "input.bam");
         assert_eq!(config.output_prefix, "output");
         assert_eq!(config.min_anchor_length, 10);
+        assert_eq!(config.min_boundary_anchor_length, 3);
         assert_eq!(config.min_intron_length, 50);
         assert_eq!(config.max_intron_length, 1000000);
         assert_eq!(config.max_loci, 3);

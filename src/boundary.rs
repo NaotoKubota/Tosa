@@ -1,9 +1,13 @@
 //! Exon-intron boundary read counting.
 //!
-//! Boundary coordinates are represented as 1-base intervals at each end of an intron.
-//! For example, intron `chr2:6545675-6547042` produces:
-//! - 5' boundary: `chr2:6545675-6545676`
-//! - 3' boundary: `chr2:6547041-6547042`
+//! Boundary coordinates straddle the exon-intron splice site so that a read must
+//! cover bases on **both** the exonic and intronic sides to be counted. The width
+//! of each boundary interval is `2 × anchor_length` (anchor bases on each side).
+//!
+//! With the default anchor length of 1, intron `chr2:6545675-6547042` (0-based
+//! half-open) produces:
+//! - 5' boundary: `chr2:6545674-6545676`  (1 exon base + 1 intron base)
+//! - 3' boundary: `chr2:6547041-6547043`  (1 intron base + 1 exon base)
 
 use std::collections::{HashMap, HashSet, BTreeMap};
 use crate::types::{BoundaryType, Mode, Strand};
@@ -11,11 +15,11 @@ use crate::types::{BoundaryType, Mode, Strand};
 /// A single boundary entry derived from GTF annotation.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct BoundaryEntry {
-    /// 1-base boundary coordinate string, e.g. "chr2:6545675-6545676"
+    /// Boundary coordinate string, e.g. "chr2:6545674-6545676"
     pub boundary_id: String,
-    /// Start position of the 1-base interval.
+    /// Start position of the boundary interval.
     pub start: i64,
-    /// End position of the 1-base interval (start + 1).
+    /// End position of the boundary interval (half-open).
     pub end: i64,
     /// Type of boundary (5' or 3').
     pub boundary_type: BoundaryType,
@@ -51,7 +55,7 @@ impl BoundaryIndex {
             .push(entry);
     }
 
-    /// Find all boundaries on a given chromosome whose 1-base interval is completely
+    /// Find all boundaries on a given chromosome whose interval is completely
     /// contained within [seg_start, seg_end).
     pub fn find_overlapping(&self, chrom: &str, seg_start: i64, seg_end: i64) -> Vec<&BoundaryEntry> {
         let mut results = Vec::new();
@@ -72,21 +76,22 @@ impl BoundaryIndex {
 
 /// Derive 5' and 3' boundary entries from an intron coordinate.
 ///
-/// Given intron `chr:intron_start-intron_end`:
-/// - 5' boundary: `chr:intron_start-(intron_start+1)`
-/// - 3' boundary: `chr:(intron_end-1)-intron_end`
-pub fn intron_to_boundaries(chrom: &str, intron_start: i64, intron_end: i64, strand: Strand) -> (BoundaryEntry, BoundaryEntry) {
+/// The boundary interval straddles the splice site with `anchor_length` bases
+/// on each side:
+/// - 5' boundary: `[intron_start - anchor_length, intron_start + anchor_length)`
+/// - 3' boundary: `[intron_end - anchor_length, intron_end + anchor_length)`
+pub fn intron_to_boundaries(chrom: &str, intron_start: i64, intron_end: i64, strand: Strand, anchor_length: i64) -> (BoundaryEntry, BoundaryEntry) {
     let five_prime = BoundaryEntry {
-        boundary_id: format!("{}:{}-{}", chrom, intron_start, intron_start + 1),
-        start: intron_start,
-        end: intron_start + 1,
+        boundary_id: format!("{}:{}-{}", chrom, intron_start - anchor_length, intron_start + anchor_length),
+        start: intron_start - anchor_length,
+        end: intron_start + anchor_length,
         boundary_type: BoundaryType::FivePrime,
         strand,
     };
     let three_prime = BoundaryEntry {
-        boundary_id: format!("{}:{}-{}", chrom, intron_end - 1, intron_end),
-        start: intron_end - 1,
-        end: intron_end,
+        boundary_id: format!("{}:{}-{}", chrom, intron_end - anchor_length, intron_end + anchor_length),
+        start: intron_end - anchor_length,
+        end: intron_end + anchor_length,
         boundary_type: BoundaryType::ThreePrime,
         strand,
     };
@@ -151,25 +156,25 @@ mod tests {
 
     #[test]
     fn test_intron_to_boundaries() {
-        let (five_p, three_p) = intron_to_boundaries("chr2", 6545675, 6547042, Strand::Plus);
+        let (five_p, three_p) = intron_to_boundaries("chr2", 6545675, 6547042, Strand::Plus, 1);
 
-        assert_eq!(five_p.boundary_id, "chr2:6545675-6545676");
-        assert_eq!(five_p.start, 6545675);
+        assert_eq!(five_p.boundary_id, "chr2:6545674-6545676");
+        assert_eq!(five_p.start, 6545674);
         assert_eq!(five_p.end, 6545676);
         assert_eq!(five_p.boundary_type, BoundaryType::FivePrime);
 
-        assert_eq!(three_p.boundary_id, "chr2:6547041-6547042");
+        assert_eq!(three_p.boundary_id, "chr2:6547041-6547043");
         assert_eq!(three_p.start, 6547041);
-        assert_eq!(three_p.end, 6547042);
+        assert_eq!(three_p.end, 6547043);
         assert_eq!(three_p.boundary_type, BoundaryType::ThreePrime);
     }
 
     #[test]
     fn test_intron_to_boundaries_example2() {
-        let (five_p, three_p) = intron_to_boundaries("chr1", 1000, 2000, Strand::Minus);
+        let (five_p, three_p) = intron_to_boundaries("chr1", 1000, 2000, Strand::Minus, 1);
 
-        assert_eq!(five_p.boundary_id, "chr1:1000-1001");
-        assert_eq!(three_p.boundary_id, "chr1:1999-2000");
+        assert_eq!(five_p.boundary_id, "chr1:999-1001");
+        assert_eq!(three_p.boundary_id, "chr1:1999-2001");
         assert_eq!(five_p.strand, Strand::Minus);
     }
 
@@ -177,14 +182,14 @@ mod tests {
     fn test_boundary_index_find_overlapping() {
         let mut index = BoundaryIndex::new();
 
-        let (five_p, three_p) = intron_to_boundaries("chr2", 6545675, 6547042, Strand::Plus);
+        let (five_p, three_p) = intron_to_boundaries("chr2", 6545675, 6547042, Strand::Plus, 1);
         index.add("chr2", five_p);
         index.add("chr2", three_p);
 
         // Aligned segment that spans the 5' boundary
         let overlapping = index.find_overlapping("chr2", 6545600, 6545700);
         assert_eq!(overlapping.len(), 1);
-        assert_eq!(overlapping[0].boundary_id, "chr2:6545675-6545676");
+        assert_eq!(overlapping[0].boundary_id, "chr2:6545674-6545676");
         assert_eq!(overlapping[0].boundary_type, BoundaryType::FivePrime);
 
         // Aligned segment that does NOT span the 5' boundary
@@ -194,7 +199,7 @@ mod tests {
         // Aligned segment that spans the 3' boundary
         let overlapping = index.find_overlapping("chr2", 6547000, 6547100);
         assert_eq!(overlapping.len(), 1);
-        assert_eq!(overlapping[0].boundary_id, "chr2:6547041-6547042");
+        assert_eq!(overlapping[0].boundary_id, "chr2:6547041-6547043");
 
         // Different chromosome
         let overlapping = index.find_overlapping("chr1", 6545600, 6545700);
@@ -204,7 +209,7 @@ mod tests {
     #[test]
     fn test_count_boundaries_bulk() {
         let mut index = BoundaryIndex::new();
-        let (five_p, three_p) = intron_to_boundaries("chr1", 1000, 2000, Strand::Plus);
+        let (five_p, three_p) = intron_to_boundaries("chr1", 1000, 2000, Strand::Plus, 1);
         index.add("chr1", five_p);
         index.add("chr1", three_p);
 
@@ -214,7 +219,7 @@ mod tests {
         let mut boundary_strands = HashMap::new();
         let mut processed = HashMap::new();
 
-        // Segment that spans the 5' boundary at 1000-1001
+        // Segment that spans the 5' boundary at 999-1001
         let segments = vec![(900, 1100)];
         count_boundaries(
             "chr1",
@@ -231,14 +236,14 @@ mod tests {
             Mode::Bulk,
         );
 
-        assert_eq!(boundary_totals.get("chr1:1000-1001"), Some(&1));
-        assert_eq!(boundary_totals.get("chr1:1999-2000"), None); // Not overlapping
+        assert_eq!(boundary_totals.get("chr1:999-1001"), Some(&1));
+        assert_eq!(boundary_totals.get("chr1:1999-2001"), None); // Not overlapping
     }
 
     #[test]
     fn test_count_boundaries_dedup() {
         let mut index = BoundaryIndex::new();
-        let (five_p, _three_p) = intron_to_boundaries("chr1", 1000, 2000, Strand::Plus);
+        let (five_p, _three_p) = intron_to_boundaries("chr1", 1000, 2000, Strand::Plus, 1);
         index.add("chr1", five_p);
 
         let mut boundary_counts = HashMap::new();
@@ -267,6 +272,6 @@ mod tests {
             );
         }
 
-        assert_eq!(boundary_totals.get("chr1:1000-1001"), Some(&1));
+        assert_eq!(boundary_totals.get("chr1:999-1001"), Some(&1));
     }
 }

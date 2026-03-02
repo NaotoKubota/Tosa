@@ -17,7 +17,7 @@ Fast junction and exon-intron boundary read counting from RNA-seq/scRNA-seq BAM/
 ## Features
 
 - **Junction read counting** from spliced alignments (CIGAR `N` operations)
-- **Exon-intron boundary read counting** using GTF annotation (1-base boundary coordinates)
+- **Exon-intron boundary read counting** using GTF annotation (boundary intervals straddle splice sites)
 - **BAM and CRAM** input support (CRAM files are read without a reference FASTA)
 - **Strand specificity** support: unstranded, XS tag, RF (first-strand), FR (second-strand)
 - **Bulk and single-cell** modes (10x Genomics-style cell barcodes)
@@ -38,6 +38,8 @@ Arguments:
 Options:
   -a, --anchor-length <anchor_length>
           Minimum anchor length for both sides of junctions [default: 8]
+  -b, --boundary-anchor-length <boundary_anchor_length>
+          Minimum anchor length on each side of exon-intron boundaries [default: 1]
   -m, --min-intron-length <min_intron_length>
           Minimum intron length for junctions [default: 20]
   -M, --max-intron-length <max_intron_length>
@@ -154,10 +156,15 @@ For a detailed reference — including correspondence tables for other tools (HI
 - Bulk: `{prefix}_boundary.tsv.gz` with columns `Boundary`, `Type`, `Strand`, `Count`
 - Single: `{prefix}_boundary_matrix.mtx.gz`, `{prefix}_boundary_barcodes.tsv.gz`, `{prefix}_boundary_features.tsv.gz`
 
-Boundary coordinates use 1-base intervals at intron ends. For example, intron `chr2:6545675-6547042` produces:
+Boundary coordinates straddle the exon-intron splice site. Each boundary interval
+extends `anchor_length` bases (default 1) on both the exonic and intronic sides.
+For example, intron `chr2:6545675-6547042` (0-based half-open) produces:
 
-- 5' boundary: `chr2:6545675-6545676`
-- 3' boundary: `chr2:6547041-6547042`
+- 5' boundary: `chr2:6545674-6545676`  (1 exon base + 1 intron base)
+- 3' boundary: `chr2:6547041-6547043`  (1 intron base + 1 exon base)
+
+A read is counted only when its aligned segment fully contains the boundary interval,
+ensuring coverage on both sides of the splice site.
 
 ## License
 

@@ -34,6 +34,7 @@ pub fn run(config: &RunConfig) -> Result<(), Box<dyn std::error::Error>> {
     info!("Input file: {}", config.bam_file);
     info!("Output prefix: {}", config.output_prefix);
     info!("Minimum anchor length: {}", config.min_anchor_length);
+    info!("Boundary anchor length: {}", config.min_boundary_anchor_length);
     info!("Minimum intron length: {}", config.min_intron_length);
     info!("Maximum intron length: {}", config.max_intron_length);
     info!("Maximum loci (NH): {}", config.max_loci);
@@ -59,7 +60,7 @@ pub fn run(config: &RunConfig) -> Result<(), Box<dyn std::error::Error>> {
     // Parse GTF for boundary counting (if provided)
     let boundary_index = if let Some(ref gtf_path) = config.gtf_file {
         info!("GTF file: {}", gtf_path);
-        Some(gtf::parse_gtf(gtf_path)?)
+        Some(gtf::parse_gtf(gtf_path, config.min_boundary_anchor_length)?)
     } else {
         None
     };
@@ -148,6 +149,7 @@ mod tests {
             bam_file: test_bam_path(),
             output_prefix: prefix,
             min_anchor_length: 8,
+            min_boundary_anchor_length: 1,
             min_intron_length: 20,
             max_intron_length: 500000,
             max_loci: 1,
@@ -176,6 +178,7 @@ mod tests {
             bam_file: test_bam_path(),
             output_prefix: prefix,
             min_anchor_length: 8,
+            min_boundary_anchor_length: 1,
             min_intron_length: 20,
             max_intron_length: 500000,
             max_loci: 1,

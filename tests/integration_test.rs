@@ -14,10 +14,10 @@
 //!   chr1:1701-1999  +   5
 //!
 //! Expected boundaries (unstranded, with GTF):
-//!   chr1:1200-1201  5p  .  2
-//!   chr1:1498-1499  3p  .  2
-//!   chr1:1700-1701  5p  .  1
-//!   chr1:1998-1999  3p  .  1
+//!   chr1:1199-1201  5p  .  2
+//!   chr1:1498-1500  3p  .  2
+//!   chr1:1699-1701  5p  .  1
+//!   chr1:1998-2000  3p  .  1
 //!
 //! Single-cell barcodes: AAAA-1, BBBB-1, CCCC-1
 //! Expected per-cell junction counts (unstranded):
@@ -76,6 +76,7 @@ fn bulk_config(strand: tosa::types::StrandMode, gtf: Option<String>) -> tosa::ty
         bam_file: test_bam_path(),
         output_prefix: "/dev/null".to_string(),
         min_anchor_length: 8,
+        min_boundary_anchor_length: 1,
         min_intron_length: 20,
         max_intron_length: 500000,
         max_loci: 1,
@@ -153,7 +154,7 @@ fn test_bulk_boundary_with_gtf() {
         tosa::types::StrandMode::Unstranded,
         Some(test_gtf_path()),
     );
-    let boundary_index = tosa::gtf::parse_gtf(&test_gtf_path()).unwrap();
+    let boundary_index = tosa::gtf::parse_gtf(&test_gtf_path(), 1).unwrap();
     let result = tosa::bam_reader::process_bam_records(
         &config,
         &HashSet::new(),
@@ -171,10 +172,10 @@ fn test_bulk_boundary_with_gtf() {
         result.boundary_totals.get(key).copied().unwrap_or(0)
     };
 
-    assert_eq!(get_b("chr1:1200-1201"), 2, "5' boundary at intron 1 start");
-    assert_eq!(get_b("chr1:1498-1499"), 2, "3' boundary at intron 1 end");
-    assert_eq!(get_b("chr1:1700-1701"), 1, "5' boundary at intron 2 start");
-    assert_eq!(get_b("chr1:1998-1999"), 1, "3' boundary at intron 2 end");
+    assert_eq!(get_b("chr1:1199-1201"), 2, "5' boundary at intron 1 start");
+    assert_eq!(get_b("chr1:1498-1500"), 2, "3' boundary at intron 1 end");
+    assert_eq!(get_b("chr1:1699-1701"), 1, "5' boundary at intron 2 start");
+    assert_eq!(get_b("chr1:1998-2000"), 1, "3' boundary at intron 2 end");
 }
 
 // ===========================================================================
@@ -182,7 +183,7 @@ fn test_bulk_boundary_with_gtf() {
 // ===========================================================================
 #[test]
 fn test_gtf_parsing() {
-    let boundary_index = tosa::gtf::parse_gtf(&test_gtf_path()).unwrap();
+    let boundary_index = tosa::gtf::parse_gtf(&test_gtf_path(), 1).unwrap();
 
     // Should have boundaries on chr1
     assert!(
@@ -191,8 +192,8 @@ fn test_gtf_parsing() {
     );
 
     // GTF: exons at 1000-1200, 1500-1700, 2000-2300 (1-based inclusive)
-    // Intron 1: 1201-1499 → 5' boundary 1200-1201, 3' boundary 1498-1499
-    // Intron 2: 1701-1999 → 5' boundary 1700-1701, 3' boundary 1998-1999
+    // Intron 1: 1201-1499 → 5' boundary 1199-1201, 3' boundary 1498-1500
+    // Intron 2: 1701-1999 → 5' boundary 1699-1701, 3' boundary 1998-2000
     let overlapping_5p = boundary_index.find_overlapping("chr1", 1199, 1202);
     assert!(
         !overlapping_5p.is_empty(),
@@ -257,6 +258,7 @@ fn single_config(
         bam_file: test_bam_path(),
         output_prefix: "/dev/null".to_string(),
         min_anchor_length: 8,
+        min_boundary_anchor_length: 1,
         min_intron_length: 20,
         max_intron_length: 500000,
         max_loci: 1,
@@ -346,7 +348,7 @@ fn test_single_boundary_with_gtf() {
         Some(test_gtf_path()),
         Some(test_barcodes_path()),
     );
-    let boundary_index = tosa::gtf::parse_gtf(&test_gtf_path()).unwrap();
+    let boundary_index = tosa::gtf::parse_gtf(&test_gtf_path(), 1).unwrap();
     let result = tosa::bam_reader::process_bam_records(
         &config,
         &barcodes,
@@ -360,10 +362,10 @@ fn test_single_boundary_with_gtf() {
             .and_then(|m| m.get("CCCC-1")).copied().unwrap_or(0)
     };
 
-    assert_eq!(get_bc("chr1:1200-1201"), 2, "5' boundary intron 1, CCCC-1");
-    assert_eq!(get_bc("chr1:1498-1499"), 2, "3' boundary intron 1, CCCC-1");
-    assert_eq!(get_bc("chr1:1700-1701"), 1, "5' boundary intron 2, CCCC-1");
-    assert_eq!(get_bc("chr1:1998-1999"), 1, "3' boundary intron 2, CCCC-1");
+    assert_eq!(get_bc("chr1:1199-1201"), 2, "5' boundary intron 1, CCCC-1");
+    assert_eq!(get_bc("chr1:1498-1500"), 2, "3' boundary intron 1, CCCC-1");
+    assert_eq!(get_bc("chr1:1699-1701"), 1, "5' boundary intron 2, CCCC-1");
+    assert_eq!(get_bc("chr1:1998-2000"), 1, "3' boundary intron 2, CCCC-1");
 }
 
 // ===========================================================================
@@ -597,6 +599,7 @@ fn test_run_bulk_mode() {
         bam_file: test_bam_path(),
         output_prefix: prefix.clone(),
         min_anchor_length: 8,
+        min_boundary_anchor_length: 1,
         min_intron_length: 20,
         max_intron_length: 500000,
         max_loci: 1,
@@ -631,6 +634,7 @@ fn test_run_bulk_no_gtf() {
         bam_file: test_bam_path(),
         output_prefix: prefix.clone(),
         min_anchor_length: 8,
+        min_boundary_anchor_length: 1,
         min_intron_length: 20,
         max_intron_length: 500000,
         max_loci: 1,
@@ -664,6 +668,7 @@ fn test_run_single_mode() {
         bam_file: test_bam_path(),
         output_prefix: prefix.clone(),
         min_anchor_length: 8,
+        min_boundary_anchor_length: 1,
         min_intron_length: 20,
         max_intron_length: 500000,
         max_loci: 1,
@@ -700,6 +705,7 @@ fn test_run_single_no_barcode_file() {
         bam_file: test_bam_path(),
         output_prefix: prefix.clone(),
         min_anchor_length: 8,
+        min_boundary_anchor_length: 1,
         min_intron_length: 20,
         max_intron_length: 500000,
         max_loci: 1,
@@ -733,6 +739,7 @@ fn bulk_config_cram(strand: tosa::types::StrandMode, gtf: Option<String>) -> tos
         bam_file: test_cram_path(),
         output_prefix: "/dev/null".to_string(),
         min_anchor_length: 8,
+        min_boundary_anchor_length: 1,
         min_intron_length: 20,
         max_intron_length: 500000,
         max_loci: 1,
@@ -808,7 +815,7 @@ fn test_cram_bulk_boundary_with_gtf() {
         tosa::types::StrandMode::Unstranded,
         Some(test_gtf_path()),
     );
-    let boundary_index = tosa::gtf::parse_gtf(&test_gtf_path()).unwrap();
+    let boundary_index = tosa::gtf::parse_gtf(&test_gtf_path(), 1).unwrap();
     let result = tosa::bam_reader::process_bam_records(
         &config, &HashSet::new(), Some(&boundary_index),
     ).unwrap();
@@ -817,10 +824,10 @@ fn test_cram_bulk_boundary_with_gtf() {
     assert!(!result.boundary_totals.is_empty());
 
     let get_b = |key: &str| result.boundary_totals.get(key).copied().unwrap_or(0);
-    assert_eq!(get_b("chr1:1200-1201"), 2, "CRAM: 5' boundary at intron 1");
-    assert_eq!(get_b("chr1:1498-1499"), 2, "CRAM: 3' boundary at intron 1");
-    assert_eq!(get_b("chr1:1700-1701"), 1, "CRAM: 5' boundary at intron 2");
-    assert_eq!(get_b("chr1:1998-1999"), 1, "CRAM: 3' boundary at intron 2");
+    assert_eq!(get_b("chr1:1199-1201"), 2, "CRAM: 5' boundary at intron 1");
+    assert_eq!(get_b("chr1:1498-1500"), 2, "CRAM: 3' boundary at intron 1");
+    assert_eq!(get_b("chr1:1699-1701"), 1, "CRAM: 5' boundary at intron 2");
+    assert_eq!(get_b("chr1:1998-2000"), 1, "CRAM: 3' boundary at intron 2");
 }
 
 // ===========================================================================
@@ -837,6 +844,7 @@ fn test_cram_run_bulk_mode() {
         bam_file: test_cram_path(),
         output_prefix: prefix.clone(),
         min_anchor_length: 8,
+        min_boundary_anchor_length: 1,
         min_intron_length: 20,
         max_intron_length: 500000,
         max_loci: 1,
@@ -867,6 +875,7 @@ fn test_cram_run_single_mode() {
         bam_file: test_cram_path(),
         output_prefix: prefix.clone(),
         min_anchor_length: 8,
+        min_boundary_anchor_length: 1,
         min_intron_length: 20,
         max_intron_length: 500000,
         max_loci: 1,
