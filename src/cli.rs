@@ -28,7 +28,7 @@ pub fn build_cli() -> Command {
         .arg(Arg::new("boundary_anchor_length")
             .short('b')
             .long("boundary-anchor-length")
-            .default_value("1")
+            .default_value("8")
             .value_parser(clap::value_parser!(i64))
             .help("Minimum anchor length on each side of exon-intron boundaries"))
         .arg(Arg::new("min_intron_length")
@@ -114,7 +114,7 @@ mod tests {
         assert_eq!(config.bam_file, "test.bam");
         assert_eq!(config.output_prefix, "out_prefix");
         assert_eq!(config.min_anchor_length, 8);
-        assert_eq!(config.min_boundary_anchor_length, 1);
+        assert_eq!(config.min_boundary_anchor_length, 8);
         assert_eq!(config.min_intron_length, 20);
         assert_eq!(config.max_intron_length, 500000);
         assert_eq!(config.max_loci, 1);

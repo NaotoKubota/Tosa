@@ -39,7 +39,7 @@ Options:
   -a, --anchor-length <anchor_length>
           Minimum anchor length for both sides of junctions [default: 8]
   -b, --boundary-anchor-length <boundary_anchor_length>
-          Minimum anchor length on each side of exon-intron boundaries [default: 1]
+          Minimum anchor length on each side of exon-intron boundaries [default: 8]
   -m, --min-intron-length <min_intron_length>
           Minimum intron length for junctions [default: 20]
   -M, --max-intron-length <max_intron_length>
@@ -157,11 +157,11 @@ For a detailed reference — including correspondence tables for other tools (HI
 - Single: `{prefix}_boundary_matrix.mtx.gz`, `{prefix}_boundary_barcodes.tsv.gz`, `{prefix}_boundary_features.tsv.gz`
 
 Boundary coordinates straddle the exon-intron splice site. Each boundary interval
-extends `anchor_length` bases (default 1) on both the exonic and intronic sides.
+extends `anchor_length` bases (default 8) on both the exonic and intronic sides.
 For example, intron `chr2:6545675-6547042` (0-based half-open) produces:
 
-- 5' boundary: `chr2:6545674-6545676`  (1 exon base + 1 intron base)
-- 3' boundary: `chr2:6547041-6547043`  (1 intron base + 1 exon base)
+- 5' boundary: `chr2:6545667-6545683`  (8 exon bases + 8 intron bases)
+- 3' boundary: `chr2:6547034-6547050`  (8 intron bases + 8 exon bases)
 
 A read is counted only when its aligned segment fully contains the boundary interval,
 ensuring coverage on both sides of the splice site.
