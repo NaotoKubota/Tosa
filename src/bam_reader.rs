@@ -36,12 +36,12 @@ pub struct ProcessingResult {
 /// SAM fields Tosa needs from each record (everything except SEQ/QUAL).
 /// By declaring these, CRAM can be decoded without a reference FASTA.
 const TOSA_REQUIRED_FIELDS: u32 =
-    (htslib::sam_fields_SAM_QNAME
+    htslib::sam_fields_SAM_QNAME
     | htslib::sam_fields_SAM_FLAG
     | htslib::sam_fields_SAM_RNAME
     | htslib::sam_fields_SAM_POS
     | htslib::sam_fields_SAM_CIGAR
-    | htslib::sam_fields_SAM_AUX) as u32;
+    | htslib::sam_fields_SAM_AUX;
 
 /// Count total mapped reads using the BAM/CRAM index.
 pub fn count_total_reads(bam_file: &str, threads: usize) -> Result<u64, Box<dyn std::error::Error + Send + Sync>> {
@@ -140,6 +140,7 @@ struct ChromResult {
 }
 
 /// Process one chromosome's records from an IndexedReader.
+#[allow(clippy::too_many_arguments)]
 fn process_chromosome(
     bam_file: &str,
     tid: u32,
@@ -185,7 +186,7 @@ fn process_chromosome(
         local_read_count += 1;
 
         // Progress logging (atomic counter shared across threads)
-        if total_mapped_reads > 0 && local_read_count % 10000 == 0 {
+        if total_mapped_reads > 0 && local_read_count.is_multiple_of(10000) {
             let global_count = progress_counter.fetch_add(10000, Ordering::Relaxed) + 10000;
             let progress_percentage = (global_count * 100) / total_mapped_reads;
             if progress_percentage <= 100 {
@@ -303,7 +304,7 @@ fn process_chromosome(
                     let start = current_pos + 1; // 1-based intron start
                     let end = current_pos + intron_length; // 1-based intron end
                     let jkey = JunctionKey {
-                        tid: tid,
+                        tid,
                         start,
                         end,
                         strand,

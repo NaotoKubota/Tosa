@@ -8,9 +8,9 @@
 [![Publish to crates.io](https://github.com/Sika-Zheng-Lab/Tosa/actions/workflows/publish.yml/badge.svg)](https://github.com/Sika-Zheng-Lab/Tosa/actions/workflows/publish.yml)
 [![crates.io](https://img.shields.io/crates/v/tosa)](https://crates.io/crates/tosa)
 [![GitHub License](https://img.shields.io/github/license/Sika-Zheng-Lab/Tosa)](https://github.com/Sika-Zheng-Lab/Tosa/blob/main/LICENSE)
-[![Docker](https://img.shields.io/docker/v/Sika-Zheng-Lab/tosa?color=blue&label=Docker)](https://hub.docker.com/r/Sika-Zheng-Lab/tosa)
-[![Docker Pulls](https://img.shields.io/docker/pulls/Sika-Zheng-Lab/tosa)](https://hub.docker.com/r/Sika-Zheng-Lab/tosa)
-[![Docker Image Size](https://img.shields.io/docker/image-size/Sika-Zheng-Lab/tosa)](https://hub.docker.com/r/Sika-Zheng-Lab/tosa)
+[![Docker](https://img.shields.io/docker/v/naotokubota/tosa?color=blue&label=Docker)](https://hub.docker.com/r/naotokubota/tosa)
+[![Docker Pulls](https://img.shields.io/docker/pulls/naotokubota/tosa)](https://hub.docker.com/r/naotokubota/tosa)
+[![Docker Image Size](https://img.shields.io/docker/image-size/naotokubota/tosa)](https://hub.docker.com/r/naotokubota/tosa)
 
 Fast junction and exon-intron boundary read counting from RNA-seq/scRNA-seq BAM/CRAM files.
 
