@@ -1,16 +1,16 @@
 # Tosa
 
-[![GitHub Release](https://img.shields.io/github/v/release/NaotoKubota/Tosa?style=flat)](https://github.com/NaotoKubota/Tosa/releases)
-[![GitHub Release Date](https://img.shields.io/github/release-date/NaotoKubota/Tosa)](https://github.com/NaotoKubota/Tosa/releases)
-[![Create Release](https://github.com/NaotoKubota/Tosa/actions/workflows/release.yml/badge.svg)](https://github.com/NaotoKubota/Tosa/actions/workflows/release.yml)
-[![Rust](https://github.com/NaotoKubota/Tosa/actions/workflows/rust.yaml/badge.svg)](https://github.com/NaotoKubota/Tosa/actions/workflows/rust.yaml)
-[![codecov](https://codecov.io/gh/NaotoKubota/Tosa/branch/main/graph/badge.svg)](https://codecov.io/gh/NaotoKubota/Tosa)
-[![Publish to crates.io](https://github.com/NaotoKubota/Tosa/actions/workflows/publish.yml/badge.svg)](https://github.com/NaotoKubota/Tosa/actions/workflows/publish.yml)
+[![GitHub Release](https://img.shields.io/github/v/release/Sika-Zheng-Lab/Tosa?style=flat)](https://github.com/Sika-Zheng-Lab/Tosa/releases)
+[![GitHub Release Date](https://img.shields.io/github/release-date/Sika-Zheng-Lab/Tosa)](https://github.com/Sika-Zheng-Lab/Tosa/releases)
+[![Create Release](https://github.com/Sika-Zheng-Lab/Tosa/actions/workflows/release.yml/badge.svg)](https://github.com/Sika-Zheng-Lab/Tosa/actions/workflows/release.yml)
+[![Rust](https://github.com/Sika-Zheng-Lab/Tosa/actions/workflows/rust.yaml/badge.svg)](https://github.com/Sika-Zheng-Lab/Tosa/actions/workflows/rust.yaml)
+[![codecov](https://codecov.io/gh/Sika-Zheng-Lab/Tosa/branch/main/graph/badge.svg)](https://codecov.io/gh/Sika-Zheng-Lab/Tosa)
+[![Publish to crates.io](https://github.com/Sika-Zheng-Lab/Tosa/actions/workflows/publish.yml/badge.svg)](https://github.com/Sika-Zheng-Lab/Tosa/actions/workflows/publish.yml)
 [![crates.io](https://img.shields.io/crates/v/tosa)](https://crates.io/crates/tosa)
-[![GitHub License](https://img.shields.io/github/license/NaotoKubota/Tosa)](https://github.com/NaotoKubota/Tosa/blob/main/LICENSE)
-[![Docker](https://img.shields.io/docker/v/naotokubota/tosa?color=blue&label=Docker)](https://hub.docker.com/r/naotokubota/tosa)
-[![Docker Pulls](https://img.shields.io/docker/pulls/naotokubota/tosa)](https://hub.docker.com/r/naotokubota/tosa)
-[![Docker Image Size](https://img.shields.io/docker/image-size/naotokubota/tosa)](https://hub.docker.com/r/naotokubota/tosa)
+[![GitHub License](https://img.shields.io/github/license/Sika-Zheng-Lab/Tosa)](https://github.com/Sika-Zheng-Lab/Tosa/blob/main/LICENSE)
+[![Docker](https://img.shields.io/docker/v/Sika-Zheng-Lab/tosa?color=blue&label=Docker)](https://hub.docker.com/r/Sika-Zheng-Lab/tosa)
+[![Docker Pulls](https://img.shields.io/docker/pulls/Sika-Zheng-Lab/tosa)](https://hub.docker.com/r/Sika-Zheng-Lab/tosa)
+[![Docker Image Size](https://img.shields.io/docker/image-size/Sika-Zheng-Lab/tosa)](https://hub.docker.com/r/Sika-Zheng-Lab/tosa)
 
 Fast junction and exon-intron boundary read counting from RNA-seq/scRNA-seq BAM/CRAM files.
 
@@ -172,8 +172,9 @@ MIT License
 
 ## Contributing
 
-Thank you for wanting to improve Tosa! If you have any bugs or questions, feel free to [open an issue](https://github.com/NaotoKubota/Tosa/issues) or pull request.
+Thank you for wanting to improve Tosa! If you have any bugs or questions, feel free to [open an issue](https://github.com/Sika-Zheng-Lab/Tosa/issues) or pull request.
 
 ## Authors
 
 - Naoto Kubota ([0000-0003-0612-2300](https://orcid.org/0000-0003-0612-2300))
+- Sika Zheng ([0000-0002-0573-4981](https://orcid.org/0000-0002-0573-4981))

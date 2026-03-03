@@ -2,7 +2,7 @@
 
 All notable changes to this Tosa project will be documented in this file.
 
-## [v0.4.0] - 2026-XX-XX
+## [v1.0.0] - 2026-XX-XX
 
 ### Added
 
@@ -10,7 +10,7 @@ All notable changes to this Tosa project will be documented in this file.
 - Add `-p`/`--threads` option for multi-threaded parallel processing (per-chromosome parallelism with rayon).
 - Add `--strand` option for strand specificity: RF (first-strand), FR (second-strand), XS (use XS tags), or omit for unstranded.
 - Add `--gtf` option for exon-intron boundary read counting using GTF annotation.
-- Add boundary read counting with 1-base boundary coordinates at intron ends (5' and 3' splice sites).
+- Add boundary read counting with 2-base boundary coordinates (5' and 3' splice sites).
 - Add Strand column to junction and boundary output files.
 - Add unit tests for junction counting, boundary counting, GTF parsing, and strand determination.
 - Add integration tests using test BAM and CRAM files.
