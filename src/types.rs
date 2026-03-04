@@ -96,6 +96,17 @@ pub fn hash_read_name(name: &[u8]) -> u64 {
     hasher.finish()
 }
 
+/// Hash a (barcode, UMI) pair to u64 for memory-efficient UMI deduplication.
+///
+/// Used in single-cell mode to ensure that reads with the same cell barcode
+/// and UMI mapping to the same junction/boundary are counted only once.
+pub fn hash_barcode_umi(barcode: &str, umi: &str) -> u64 {
+    let mut hasher = DefaultHasher::new();
+    barcode.hash(&mut hasher);
+    umi.hash(&mut hasher);
+    hasher.finish()
+}
+
 impl fmt::Display for Strand {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {

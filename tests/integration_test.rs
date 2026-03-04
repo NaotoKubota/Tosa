@@ -20,10 +20,10 @@
 //!   chr1:1998-2000  3p  .  1
 //!
 //! Single-cell barcodes: AAAA-1, BBBB-1, CCCC-1
-//! Expected per-cell junction counts (unstranded):
-//!   chr1:1201-1499  .  AAAA-1  10
-//!   chr1:1201-1499  .  BBBB-1   3
-//!   chr1:1701-1999  .  CCCC-1   5
+//! Expected per-cell junction counts (unstranded, after UMI dedup):
+//!   chr1:1201-1499  .  AAAA-1   6  (10 reads, 6 unique UMIs)
+//!   chr1:1201-1499  .  BBBB-1   2  (3 reads, 2 unique UMIs)
+//!   chr1:1701-1999  .  CCCC-1   3  (5 reads, 3 unique UMIs)
 
 use std::collections::HashSet;
 use std::path::PathBuf;
@@ -295,16 +295,16 @@ fn test_single_junction_unstranded() {
     // 2 junctions
     assert_eq!(result.junction_counts.len(), 2, "Should find 2 junctions");
 
-    // chr1:1201-1499  AAAA-1=10, BBBB-1=3
+    // chr1:1201-1499  AAAA-1=6 (UMI dedup), BBBB-1=2 (UMI dedup)
     let j1_key = result.junction_counts.keys().find(|k| k.starts_with("chr1:1201-1499")).unwrap();
     let j1 = &result.junction_counts[j1_key];
-    assert_eq!(j1.get("AAAA-1").copied().unwrap_or(0), 10);
-    assert_eq!(j1.get("BBBB-1").copied().unwrap_or(0), 3);
+    assert_eq!(j1.get("AAAA-1").copied().unwrap_or(0), 6);
+    assert_eq!(j1.get("BBBB-1").copied().unwrap_or(0), 2);
 
-    // chr1:1701-1999  CCCC-1=5
+    // chr1:1701-1999  CCCC-1=3 (UMI dedup)
     let j2_key = result.junction_counts.keys().find(|k| k.starts_with("chr1:1701-1999")).unwrap();
     let j2 = &result.junction_counts[j2_key];
-    assert_eq!(j2.get("CCCC-1").copied().unwrap_or(0), 5);
+    assert_eq!(j2.get("CCCC-1").copied().unwrap_or(0), 3);
 }
 
 // ===========================================================================
@@ -323,17 +323,17 @@ fn test_single_junction_xs_strand() {
     assert_eq!(
         result.junction_counts.get("chr1:1201-1499:+")
             .and_then(|m| m.get("AAAA-1")).copied().unwrap_or(0),
-        10
+        6
     );
     assert_eq!(
         result.junction_counts.get("chr1:1201-1499:-")
             .and_then(|m| m.get("BBBB-1")).copied().unwrap_or(0),
-        3
+        2
     );
     assert_eq!(
         result.junction_counts.get("chr1:1701-1999:+")
             .and_then(|m| m.get("CCCC-1")).copied().unwrap_or(0),
-        5
+        3
     );
 }
 
@@ -362,8 +362,8 @@ fn test_single_boundary_with_gtf() {
             .and_then(|m| m.get("CCCC-1")).copied().unwrap_or(0)
     };
 
-    assert_eq!(get_bc("chr1:1199-1201"), 2, "5' boundary intron 1, CCCC-1");
-    assert_eq!(get_bc("chr1:1498-1500"), 2, "3' boundary intron 1, CCCC-1");
+    assert_eq!(get_bc("chr1:1199-1201"), 1, "5' boundary intron 1, CCCC-1 (UMI dedup)");
+    assert_eq!(get_bc("chr1:1498-1500"), 1, "3' boundary intron 1, CCCC-1 (UMI dedup)");
     assert_eq!(get_bc("chr1:1699-1701"), 1, "5' boundary intron 2, CCCC-1");
     assert_eq!(get_bc("chr1:1998-2000"), 1, "3' boundary intron 2, CCCC-1");
 }

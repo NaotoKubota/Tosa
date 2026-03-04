@@ -170,6 +170,7 @@ fn process_chromosome(
     let mut junction_has_left_anchor: HashMap<JunctionKey, bool> = HashMap::new();
     let mut junction_has_right_anchor: HashMap<JunctionKey, bool> = HashMap::new();
     let mut processed_reads: HashMap<JunctionKey, HashSet<u64>> = HashMap::new();
+    let mut processed_umis: HashMap<JunctionKey, HashSet<u64>> = HashMap::new();
     let mut cell_barcodes: HashSet<String> = HashSet::new();
 
     let mut boundary_counts: HashMap<String, HashMap<String, u32>> = HashMap::new();
@@ -177,6 +178,7 @@ fn process_chromosome(
     let mut boundary_types: HashMap<String, crate::types::BoundaryType> = HashMap::new();
     let mut boundary_strands: HashMap<String, Strand> = HashMap::new();
     let mut processed_boundary_reads: HashMap<String, HashSet<u64>> = HashMap::new();
+    let mut processed_boundary_umis: HashMap<String, HashSet<u64>> = HashMap::new();
 
     let mut local_read_count: u64 = 0;
     let is_single = config.mode == Mode::Single;
@@ -222,6 +224,16 @@ fn process_chromosome(
         let cell_barcode = if is_single {
             match record.aux(b"CB") {
                 Ok(Aux::String(cb_str)) => Some(cb_str.to_string()),
+                _ => None,
+            }
+        } else {
+            None
+        };
+
+        // Extract UMI (UB tag) if in single mode
+        let umi = if is_single {
+            match record.aux(b"UB") {
+                Ok(Aux::String(ub_str)) => Some(ub_str.to_string()),
                 _ => None,
             }
         } else {
@@ -326,9 +338,11 @@ fn process_chromosome(
                     junction::process_junction(
                         jkey,
                         cell_barcode.as_ref(),
+                        umi.as_ref(),
                         &mut junction_counts,
                         &mut junction_totals,
                         &mut processed_reads,
+                        &mut processed_umis,
                         read_name_hash,
                         config.mode,
                     );
@@ -353,12 +367,14 @@ fn process_chromosome(
                     &segments,
                     bi,
                     cell_barcode.as_ref(),
+                    umi.as_ref(),
                     strand,
                     &mut boundary_counts,
                     &mut boundary_totals,
                     &mut boundary_types,
                     &mut boundary_strands,
                     &mut processed_boundary_reads,
+                    &mut processed_boundary_umis,
                     read_name_hash,
                     config.mode,
                 );

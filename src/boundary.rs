@@ -108,12 +108,14 @@ pub fn count_boundaries(
     aligned_segments: &[(i64, i64)],
     boundary_index: &BoundaryIndex,
     cell_barcode: Option<&String>,
+    umi: Option<&String>,
     strand: Strand,
     boundary_counts: &mut HashMap<String, HashMap<String, u32>>,
     boundary_totals: &mut HashMap<String, u32>,
     boundary_types: &mut HashMap<String, BoundaryType>,
     boundary_strands: &mut HashMap<String, Strand>,
     processed_boundary_reads: &mut HashMap<String, HashSet<u64>>,
+    processed_boundary_umis: &mut HashMap<String, HashSet<u64>>,
     read_name_hash: u64,
     mode: Mode,
 ) {
@@ -135,6 +137,15 @@ pub fn count_boundaries(
             match mode {
                 Mode::Single => {
                     if let Some(cb_str) = cell_barcode {
+                        // UMI deduplication: if a UMI is present, ensure that
+                        // (barcode, UMI) is unique per boundary before counting.
+                        if let Some(umi_str) = umi {
+                            let umi_hash = crate::types::hash_barcode_umi(cb_str, umi_str);
+                            let umis = processed_boundary_umis.entry(key.clone()).or_default();
+                            if !umis.insert(umi_hash) {
+                                continue; // Same barcode+UMI already counted for this boundary
+                            }
+                        }
                         *boundary_counts
                             .entry(key.clone())
                             .or_default()
@@ -218,6 +229,7 @@ mod tests {
         let mut boundary_types = HashMap::new();
         let mut boundary_strands = HashMap::new();
         let mut processed = HashMap::new();
+        let mut processed_umis = HashMap::new();
 
         // Segment that spans the 5' boundary at 999-1001
         let segments = vec![(900, 1100)];
@@ -226,12 +238,14 @@ mod tests {
             &segments,
             &index,
             None,
+            None,
             Strand::Plus,
             &mut boundary_counts,
             &mut boundary_totals,
             &mut boundary_types,
             &mut boundary_strands,
             &mut processed,
+            &mut processed_umis,
             12345, // read_name_hash
             Mode::Bulk,
         );
@@ -251,6 +265,7 @@ mod tests {
         let mut boundary_types = HashMap::new();
         let mut boundary_strands = HashMap::new();
         let mut processed = HashMap::new();
+        let mut processed_umis = HashMap::new();
 
         let segments = vec![(900, 1100)];
 
@@ -261,17 +276,103 @@ mod tests {
                 &segments,
                 &index,
                 None,
+                None,
                 Strand::Plus,
                 &mut boundary_counts,
                 &mut boundary_totals,
                 &mut boundary_types,
                 &mut boundary_strands,
                 &mut processed,
+                &mut processed_umis,
                 12345,
                 Mode::Bulk,
             );
         }
 
         assert_eq!(boundary_totals.get("chr1:999-1001"), Some(&1));
+    }
+
+    #[test]
+    fn test_count_boundaries_umi_dedup() {
+        // Same barcode + same UMI + same boundary → counted once
+        let mut index = BoundaryIndex::new();
+        let (five_p, _) = intron_to_boundaries("chr1", 1000, 2000, Strand::Plus, 1);
+        index.add("chr1", five_p);
+
+        let mut boundary_counts = HashMap::new();
+        let mut boundary_totals = HashMap::new();
+        let mut boundary_types = HashMap::new();
+        let mut boundary_strands = HashMap::new();
+        let mut processed = HashMap::new();
+        let mut processed_umis = HashMap::new();
+
+        let segments = vec![(900, 1100)];
+        let barcode = "AAAA-1".to_string();
+        let umi = "ACGT".to_string();
+
+        // Two different reads with same barcode+UMI
+        for hash in [11111u64, 22222u64] {
+            count_boundaries(
+                "chr1",
+                &segments,
+                &index,
+                Some(&barcode),
+                Some(&umi),
+                Strand::Plus,
+                &mut boundary_counts,
+                &mut boundary_totals,
+                &mut boundary_types,
+                &mut boundary_strands,
+                &mut processed,
+                &mut processed_umis,
+                hash,
+                Mode::Single,
+            );
+        }
+
+        assert_eq!(
+            *boundary_counts.get("chr1:999-1001").unwrap().get("AAAA-1").unwrap(),
+            1,
+            "Same barcode+UMI should be counted only once"
+        );
+    }
+
+    #[test]
+    fn test_count_boundaries_different_umis() {
+        // Same barcode, different UMIs → each counted
+        let mut index = BoundaryIndex::new();
+        let (five_p, _) = intron_to_boundaries("chr1", 1000, 2000, Strand::Plus, 1);
+        index.add("chr1", five_p);
+
+        let mut boundary_counts = HashMap::new();
+        let mut boundary_totals = HashMap::new();
+        let mut boundary_types = HashMap::new();
+        let mut boundary_strands = HashMap::new();
+        let mut processed = HashMap::new();
+        let mut processed_umis = HashMap::new();
+
+        let segments = vec![(900, 1100)];
+        let barcode = "AAAA-1".to_string();
+        let umi1 = "ACGT".to_string();
+        let umi2 = "TGCA".to_string();
+
+        count_boundaries(
+            "chr1", &segments, &index, Some(&barcode), Some(&umi1),
+            Strand::Plus, &mut boundary_counts, &mut boundary_totals,
+            &mut boundary_types, &mut boundary_strands, &mut processed,
+            &mut processed_umis, 11111, Mode::Single,
+        );
+        count_boundaries(
+            "chr1", &segments, &index, Some(&barcode), Some(&umi2),
+            Strand::Plus, &mut boundary_counts, &mut boundary_totals,
+            &mut boundary_types, &mut boundary_strands, &mut processed,
+            &mut processed_umis, 22222, Mode::Single,
+        );
+
+        assert_eq!(
+            *boundary_counts.get("chr1:999-1001").unwrap().get("AAAA-1").unwrap(),
+            2,
+            "Different UMIs should be counted separately"
+        );
     }
 }
