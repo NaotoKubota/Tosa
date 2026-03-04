@@ -164,13 +164,10 @@ fn process_chromosome(
         i64::MAX,
     ))?;
 
-    let mut junction_counts: HashMap<JunctionKey, HashMap<String, u32>> = HashMap::new();
-    let mut junction_totals: HashMap<JunctionKey, u32> = HashMap::new();
+    let mut junction_state = junction::JunctionState::new();
     let mut junction_strands: HashMap<JunctionKey, Strand> = HashMap::new();
     let mut junction_has_left_anchor: HashMap<JunctionKey, bool> = HashMap::new();
     let mut junction_has_right_anchor: HashMap<JunctionKey, bool> = HashMap::new();
-    let mut processed_reads: HashMap<JunctionKey, HashSet<u64>> = HashMap::new();
-    let mut processed_umis: HashMap<JunctionKey, HashSet<u64>> = HashMap::new();
     let mut cell_barcodes: HashSet<String> = HashSet::new();
 
     let mut boundary_counts: HashMap<String, HashMap<String, u32>> = HashMap::new();
@@ -339,10 +336,7 @@ fn process_chromosome(
                         jkey,
                         cell_barcode.as_ref(),
                         umi.as_ref(),
-                        &mut junction_counts,
-                        &mut junction_totals,
-                        &mut processed_reads,
-                        &mut processed_umis,
+                        &mut junction_state,
                         read_name_hash,
                         config.mode,
                     );
@@ -389,8 +383,8 @@ fn process_chromosome(
     }
 
     Ok(ChromResult {
-        junction_counts,
-        junction_totals,
+        junction_counts: junction_state.junction_counts,
+        junction_totals: junction_state.junction_totals,
         junction_strands,
         junction_has_left_anchor,
         junction_has_right_anchor,

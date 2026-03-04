@@ -4,6 +4,32 @@ use std::collections::{HashMap, HashSet};
 #[allow(unused_imports)] // Used by tests via `use super::*`
 use crate::types::{JunctionKey, Mode, Strand, hash_barcode_umi};
 
+/// Mutable state for junction counting, grouping the lookup tables used during
+/// BAM processing so that they can be passed as a single argument.
+pub struct JunctionState {
+    pub junction_counts: HashMap<JunctionKey, HashMap<String, u32>>,
+    pub junction_totals: HashMap<JunctionKey, u32>,
+    pub processed_reads: HashMap<JunctionKey, HashSet<u64>>,
+    pub processed_umis: HashMap<JunctionKey, HashSet<u64>>,
+}
+
+impl Default for JunctionState {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl JunctionState {
+    pub fn new() -> Self {
+        Self {
+            junction_counts: HashMap::new(),
+            junction_totals: HashMap::new(),
+            processed_reads: HashMap::new(),
+            processed_umis: HashMap::new(),
+        }
+    }
+}
+
 /// Process a junction read, incrementing counts and tracking duplicates.
 ///
 /// Duplicate reads (same read-name hash for same junction) are counted only once.
@@ -14,16 +40,13 @@ pub fn process_junction(
     key: JunctionKey,
     cell_barcode: Option<&String>,
     umi: Option<&String>,
-    junction_counts: &mut HashMap<JunctionKey, HashMap<String, u32>>,
-    junction_totals: &mut HashMap<JunctionKey, u32>,
-    processed_reads: &mut HashMap<JunctionKey, HashSet<u64>>,
-    processed_umis: &mut HashMap<JunctionKey, HashSet<u64>>,
+    state: &mut JunctionState,
     read_name_hash: u64,
     mode: Mode,
 ) {
     // Check if the read was already processed for this junction (via u64 hash)
     // This deduplicates paired-end reads (same QNAME) mapping to the same junction.
-    let reads = processed_reads.entry(key).or_default();
+    let reads = state.processed_reads.entry(key).or_default();
     if !reads.insert(read_name_hash) {
         return; // Already counted
     }
@@ -36,12 +59,12 @@ pub fn process_junction(
                 // (barcode, UMI) is unique per junction before counting.
                 if let Some(umi_str) = umi {
                     let umi_hash = hash_barcode_umi(cb_str, umi_str);
-                    let umis = processed_umis.entry(key).or_default();
+                    let umis = state.processed_umis.entry(key).or_default();
                     if !umis.insert(umi_hash) {
                         return; // Same barcode+UMI already counted for this junction
                     }
                 }
-                *junction_counts
+                *state.junction_counts
                     .entry(key)
                     .or_default()
                     .entry(cb_str.clone())
@@ -49,7 +72,7 @@ pub fn process_junction(
             }
         }
         Mode::Bulk => {
-            *junction_totals.entry(key).or_insert(0) += 1;
+            *state.junction_totals.entry(key).or_insert(0) += 1;
         }
     }
 }
@@ -74,10 +97,7 @@ mod tests {
 
     #[test]
     fn test_process_junction_bulk() {
-        let mut junction_counts = HashMap::new();
-        let mut junction_totals = HashMap::new();
-        let mut processed_reads = HashMap::new();
-        let mut processed_umis = HashMap::new();
+        let mut state = JunctionState::new();
 
         let key = JunctionKey { tid: 0, start: 100, end: 200, strand: Strand::Plus };
 
@@ -85,23 +105,17 @@ mod tests {
             key,
             None,
             None,
-            &mut junction_counts,
-            &mut junction_totals,
-            &mut processed_reads,
-            &mut processed_umis,
+            &mut state,
             12345, // read_name_hash
             Mode::Bulk,
         );
 
-        assert_eq!(junction_totals.get(&key), Some(&1));
+        assert_eq!(state.junction_totals.get(&key), Some(&1));
     }
 
     #[test]
     fn test_process_junction_dedup() {
-        let mut junction_counts = HashMap::new();
-        let mut junction_totals = HashMap::new();
-        let mut processed_reads = HashMap::new();
-        let mut processed_umis = HashMap::new();
+        let mut state = JunctionState::new();
 
         let key = JunctionKey { tid: 0, start: 100, end: 200, strand: Strand::Plus };
 
@@ -111,25 +125,19 @@ mod tests {
                 key,
                 None,
                 None,
-                &mut junction_counts,
-                &mut junction_totals,
-                &mut processed_reads,
-                &mut processed_umis,
+                &mut state,
                 12345,
                 Mode::Bulk,
             );
         }
 
         // Should only be counted once
-        assert_eq!(junction_totals.get(&key), Some(&1));
+        assert_eq!(state.junction_totals.get(&key), Some(&1));
     }
 
     #[test]
     fn test_process_junction_different_strands() {
-        let mut junction_counts = HashMap::new();
-        let mut junction_totals = HashMap::new();
-        let mut processed_reads = HashMap::new();
-        let mut processed_umis = HashMap::new();
+        let mut state = JunctionState::new();
 
         let key_plus = JunctionKey { tid: 0, start: 100, end: 200, strand: Strand::Plus };
         let key_minus = JunctionKey { tid: 0, start: 100, end: 200, strand: Strand::Minus };
@@ -138,10 +146,7 @@ mod tests {
             key_plus,
             None,
             None,
-            &mut junction_counts,
-            &mut junction_totals,
-            &mut processed_reads,
-            &mut processed_umis,
+            &mut state,
             11111,
             Mode::Bulk,
         );
@@ -150,25 +155,19 @@ mod tests {
             key_minus,
             None,
             None,
-            &mut junction_counts,
-            &mut junction_totals,
-            &mut processed_reads,
-            &mut processed_umis,
+            &mut state,
             22222,
             Mode::Bulk,
         );
 
         // Same coords, different strand → separate counts
-        assert_eq!(junction_totals.get(&key_plus), Some(&1));
-        assert_eq!(junction_totals.get(&key_minus), Some(&1));
+        assert_eq!(state.junction_totals.get(&key_plus), Some(&1));
+        assert_eq!(state.junction_totals.get(&key_minus), Some(&1));
     }
 
     #[test]
     fn test_process_junction_single_mode() {
-        let mut junction_counts = HashMap::new();
-        let mut junction_totals = HashMap::new();
-        let mut processed_reads = HashMap::new();
-        let mut processed_umis = HashMap::new();
+        let mut state = JunctionState::new();
 
         let key = JunctionKey { tid: 0, start: 100, end: 200, strand: Strand::Unknown };
         let barcode = "ACGT-1".to_string();
@@ -177,16 +176,13 @@ mod tests {
             key,
             Some(&barcode),
             None, // no UMI
-            &mut junction_counts,
-            &mut junction_totals,
-            &mut processed_reads,
-            &mut processed_umis,
+            &mut state,
             12345,
             Mode::Single,
         );
 
         assert_eq!(
-            *junction_counts.get(&key).unwrap().get("ACGT-1").unwrap(),
+            *state.junction_counts.get(&key).unwrap().get("ACGT-1").unwrap(),
             1
         );
     }
@@ -194,10 +190,7 @@ mod tests {
     #[test]
     fn test_process_junction_umi_dedup() {
         // Same barcode + same UMI + same junction → counted once
-        let mut junction_counts = HashMap::new();
-        let mut junction_totals = HashMap::new();
-        let mut processed_reads = HashMap::new();
-        let mut processed_umis = HashMap::new();
+        let mut state = JunctionState::new();
 
         let key = JunctionKey { tid: 0, start: 100, end: 200, strand: Strand::Plus };
         let barcode = "AAAA-1".to_string();
@@ -209,17 +202,14 @@ mod tests {
                 key,
                 Some(&barcode),
                 Some(&umi),
-                &mut junction_counts,
-                &mut junction_totals,
-                &mut processed_reads,
-                &mut processed_umis,
+                &mut state,
                 hash,
                 Mode::Single,
             );
         }
 
         assert_eq!(
-            *junction_counts.get(&key).unwrap().get("AAAA-1").unwrap(),
+            *state.junction_counts.get(&key).unwrap().get("AAAA-1").unwrap(),
             1,
             "Same barcode+UMI should be counted only once"
         );
@@ -228,10 +218,7 @@ mod tests {
     #[test]
     fn test_process_junction_different_umis() {
         // Same barcode, different UMIs → each counted
-        let mut junction_counts = HashMap::new();
-        let mut junction_totals = HashMap::new();
-        let mut processed_reads = HashMap::new();
-        let mut processed_umis = HashMap::new();
+        let mut state = JunctionState::new();
 
         let key = JunctionKey { tid: 0, start: 100, end: 200, strand: Strand::Plus };
         let barcode = "AAAA-1".to_string();
@@ -240,19 +227,17 @@ mod tests {
 
         process_junction(
             key, Some(&barcode), Some(&umi1),
-            &mut junction_counts, &mut junction_totals,
-            &mut processed_reads, &mut processed_umis,
+            &mut state,
             11111, Mode::Single,
         );
         process_junction(
             key, Some(&barcode), Some(&umi2),
-            &mut junction_counts, &mut junction_totals,
-            &mut processed_reads, &mut processed_umis,
+            &mut state,
             22222, Mode::Single,
         );
 
         assert_eq!(
-            *junction_counts.get(&key).unwrap().get("AAAA-1").unwrap(),
+            *state.junction_counts.get(&key).unwrap().get("AAAA-1").unwrap(),
             2,
             "Different UMIs should be counted separately"
         );
@@ -261,10 +246,7 @@ mod tests {
     #[test]
     fn test_process_junction_no_umi_fallback() {
         // No UMI → falls back to read-name dedup only; different read hashes both count
-        let mut junction_counts = HashMap::new();
-        let mut junction_totals = HashMap::new();
-        let mut processed_reads = HashMap::new();
-        let mut processed_umis = HashMap::new();
+        let mut state = JunctionState::new();
 
         let key = JunctionKey { tid: 0, start: 100, end: 200, strand: Strand::Plus };
         let barcode = "AAAA-1".to_string();
@@ -272,14 +254,13 @@ mod tests {
         for hash in [11111u64, 22222u64] {
             process_junction(
                 key, Some(&barcode), None,
-                &mut junction_counts, &mut junction_totals,
-                &mut processed_reads, &mut processed_umis,
+                &mut state,
                 hash, Mode::Single,
             );
         }
 
         assert_eq!(
-            *junction_counts.get(&key).unwrap().get("AAAA-1").unwrap(),
+            *state.junction_counts.get(&key).unwrap().get("AAAA-1").unwrap(),
             2,
             "Without UMI, each unique read should be counted"
         );
