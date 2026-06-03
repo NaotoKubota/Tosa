@@ -1,4 +1,4 @@
-# Tosa
+# Tosa (Targeted Output for Splicing Analysis)
 
 [![GitHub Release](https://img.shields.io/github/v/release/Sika-Zheng-Lab/Tosa?style=flat)](https://github.com/Sika-Zheng-Lab/Tosa/releases)
 [![GitHub Release Date](https://img.shields.io/github/release-date/Sika-Zheng-Lab/Tosa)](https://github.com/Sika-Zheng-Lab/Tosa/releases)
